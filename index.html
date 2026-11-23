@@ -152,7 +152,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 var SB_KEY = 'sb_publishable_cSQ9zpZCP1C7OJFTeIydrQ_PZcXJBGo';
-var sb = window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:'pkce'}});
+var sb = window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:'implicit'}});
 var ROL = null;
 function rpc(name, args){
   return sb.rpc(name, args || {}).then(function(r){
@@ -482,17 +482,25 @@ function sevilay(){
 function girisEkrani(not){
   document.getElementById('nav').hidden = true;
   document.getElementById('fresh').textContent = 'Giriş';
-  var em = h('input', {id:'g_email', type:'email', autocomplete:'email', inputmode:'email', placeholder:'e-posta adresin', required:''});
+  var em = h('input', {id:'g_email', type:'email', autocomplete:'username', inputmode:'email', placeholder:'e-posta adresin'});
+  var pw = h('input', {id:'g_pw', type:'password', autocomplete:'current-password', placeholder:'şifren (en az 8 karakter)'});
   var info = h('div', {cls:'m', text:not || ''});
-  var btn = h('button', {cls:'pri', type:'submit', text:'Giriş bağlantısı gönder'});
-  view.replaceChildren(h('form', {cls:'q', onsubmit:function(e){ e.preventDefault();
-      var v = em.value.trim(); if (!v) return; btn.disabled = true; info.textContent = 'Gönderiliyor…';
-      sb.auth.signInWithOtp({email:v, options:{emailRedirectTo: location.origin + location.pathname, shouldCreateUser:true}}).then(function(r){
-        btn.disabled = false;
-        info.textContent = r.error ? ('Gönderilemedi: ' + r.error.message) : 'E-postana giriş bağlantısı gönderildi. Bu telefonda e-postayı açıp bağlantıya dokun; uygulama açılır ve bir daha sormaz.';
-      }); }}, [
-    sec('Özkan REOS'), h('div', {cls:'m', text:'Yalnız tanımlı e-posta adresleriyle girilir. Şifre yok: e-postana gelen bağlantıya dokunman yeterli.'}),
-    h('label', {'for':'g_email'}, ['E-posta', em]), h('div', {cls:'acts'}, [btn]), info]));
+  function tr(m){ return /Invalid login/i.test(m) ? 'E-posta ya da şifre yanlış. İlk kez giriyorsan "İlk kez giriyorum"a bas.' :
+    /already registered/i.test(m) ? 'Bu e-postayla hesap zaten var; "Giriş yap"a bas.' : /Password should be/i.test(m) ? 'Şifre en az 8 karakter olmalı.' : m; }
+  function go(yeni){
+    var e = em.value.trim(), p = pw.value;
+    if (!e || p.length < 8) { info.textContent = 'E-posta ve en az 8 karakterlik şifre gir.'; return; }
+    info.textContent = 'Bekle…';
+    (yeni ? sb.auth.signUp({email:e, password:p}) : sb.auth.signInWithPassword({email:e, password:p})).then(function(r){
+      if (r.error) { info.textContent = tr(r.error.message); return; }
+      if (!r.data.session) { info.textContent = 'Hesabın açıldı. Claude onaylayınca (birkaç dakika) aynı e-posta ve şifreyle "Giriş yap"a bas. E-postana gelen onay bağlantısına basmana gerek yok.'; return; }
+      basla();
+    });
+  }
+  view.replaceChildren(h('form', {cls:'q', onsubmit:function(ev){ ev.preventDefault(); go(false); }}, [
+    sec('Özkan REOS'), h('div', {cls:'m', text:'Yalnız tanımlı e-posta adresleri veriyi görür. İlk kez giriyorsan şifreni kendin belirle ve "İlk kez giriyorum"a bas; sonraki girişlerde "Giriş yap". Telefon şifreyi hatırlar.'}),
+    h('label', {'for':'g_email'}, ['E-posta', em]), h('label', {'for':'g_pw'}, ['Şifre', pw]),
+    h('div', {cls:'acts'}, [h('button', {cls:'pri', type:'submit', text:'Giriş yap'}), h('button', {type:'button', text:'İlk kez giriyorum', onclick:function(){ go(true); }})]), info]));
 }
 function cikis(){ sb.auth.signOut().then(function(){ ROL = null; girisEkrani('Çıkış yapıldı.'); }); }
 
@@ -510,7 +518,7 @@ function route(){
 }
 function basla(){
   rpc('reos_ben').then(function(b){
-    if (!b || !b.rol) { view.replaceChildren(h('div', {cls:'msg err', text:(b && b.email ? b.email : 'Bu hesap') + ' uygulamaya tanımlı değil. Özkan\'a söyle.'}), h('div', {cls:'acts'}, [h('button', {text:'Çıkış', onclick:cikis})])); return; }
+    if (!b || !b.rol) { view.replaceChildren(h('div', {cls:'msg err', text:(b && b.email ? b.email : 'Bu hesap') + ' hesabı henüz onaylanmadı. Özkan Claude\'a "onayla" desin, sonra sayfayı yenile.'}), h('div', {cls:'acts'}, [h('button', {text:'Çıkış', onclick:cikis})])); return; }
     ROL = b.rol;
     document.getElementById('nav').hidden = false;
     var hd = document.getElementById('fresh');
