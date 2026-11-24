@@ -169,8 +169,8 @@ function loading(t){ view.replaceChildren(h('div', {cls:'spin', text:t || 'Yükl
 
 /* ---------- sonuç kaydı ---------- */
 var dlg = document.getElementById('dlg'), curRef = null;
-function kaydetAc(ref, baslik, phone, name){
-  curRef = {ref: ref || '', phone: phone || '', name: name || ''};
+function kaydetAc(ref, baslik, phone, name, tur){
+  curRef = {ref: ref || '', phone: phone || '', name: name || '', tur: tur || ''};
   document.getElementById('kbaslik').textContent = 'Sonuç kaydet: ' + (baslik || ref || '');
   document.getElementById('kref').textContent = ref ? ('Kayıt: ' + ref) : '';
   ['k_ozet','k_tarih','k_adim','k_neden'].forEach(function(id){ document.getElementById(id).value = ''; });
@@ -186,7 +186,7 @@ document.getElementById('kform').addEventListener('submit', function(ev){
     summary: document.getElementById('k_ozet').value.trim(), stage: document.getElementById('k_asama').value,
     next_date: document.getElementById('k_tarih').value, next_step: document.getElementById('k_adim').value.trim(),
     reason: document.getElementById('k_neden').value.trim(), channel: document.getElementById('k_kanal').value,
-    by: document.getElementById('k_kim').value};
+    by: document.getElementById('k_kim').value, tur: curRef.tur};
   if (!p.summary) { document.getElementById('kres').textContent = 'Ne olduğunu bir cümleyle yaz.'; return; }
   Object.keys(p).forEach(function(k){ if (p[k] === '') delete p[k]; });
   var btn = document.getElementById('ksave'); btn.disabled = true;
@@ -195,7 +195,7 @@ document.getElementById('kform').addEventListener('submit', function(ev){
     var s = (r && (r.huni || r.id)) ? ('Kaydedildi: ' + (r.huni || r.id) + (r.asama ? ' · ' + r.asama : '') + (r.takip ? ' · takip ' + fmtDate(r.takip) : '')) : 'Kaydedildi.';
     if (r && r.yeni_kayit && r.ilan_bulundu === false) s += ' (İlan veritabanında yok; yeni huni kaydı telefon/ad ile açıldı.)';
     document.getElementById('kres').textContent = s;
-    setTimeout(function(){ dlg.close(); if (location.hash === '#bugun' || location.hash === '#huni' || !location.hash) route(); }, 1200);
+    setTimeout(function(){ dlg.close(); if (['#bugun','#huni','#sevilay',''].indexOf(location.hash) >= 0) route(); }, 1200);
   }).catch(function(e){ btn.disabled = false; document.getElementById('kres').textContent = 'Kaydedilemedi: ' + e.message; });
 });
 
@@ -218,6 +218,15 @@ function bugun(){
     var ozet = ev.filter(function(r){ return r[1] === 'pazar_ozeti' || r[1] === 'haftalik_huni'; });
     ozet.forEach(function(r){ out.push(h('div', {cls:'msg', text:r[13]})); });
 
+    if ((d.devral || []).length) {
+      out.push(sec('Sevilay\'dan devral: sahip cevap verdi', d.devral.length));
+      d.devral.forEach(function(p){ out.push(h('div', {cls:'card hot'}, [
+        h('div', {cls:'row'}, [chip(p.id), chip('cevap ' + (p.cevap || ''), 'warn')]),
+        h('div', {cls:'t', text:(p.ad ? p.ad + ' · ' : '') + (p.baslik || '')}),
+        p.fiyat ? h('div', {cls:'price', text:tl(p.fiyat)}) : null,
+        p.not ? h('div', {cls:'m', text:p.not}) : null,
+        h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonuç yaz', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])])); });
+    }
     out.push(sec('Takip günü gelenler', d.takip.length));
     if (!d.takip.length) out.push(empty('Bugün takip günü gelen huni kaydı yok.'));
     d.takip.forEach(function(p){
@@ -438,7 +447,18 @@ function deki(w){
   return w + '\'' + (hard ? 't' : 'd') + ('aıou'.indexOf(v) >= 0 ? 'a' : 'e') + 'ki';
 }
 function mah(m){ return String(m || '').replace(/ Mahallesi$/i, ''); }
+function yerAdi(x){ return x.site ? x.site : mah(x.mahalle); }
+function takipMesaj(x){
+  var kira = /kiral/i.test(x.tur || ''), yer = deki(yerAdi(x)), ilan = yer + ' ' + (x.oda || '') + ' ' + (kira ? 'kiralık' : 'satılık') + ' ilanınız';
+  if (x.adim === 'ikinci_mesaj') return 'Merhaba tekrar, ' + ilan + ' için birkaç gün önce yazmıştım. ' + (kira ? 'Bu bölgede son dönemde dairelerin hangi aralıkta kiralandığını çıkardım; ' : 'Bu mahallede son aylarda gerçekleşen satışların fiyat aralığını çıkardım; ') + 'ilanınızın nerede durduğunu görmek isterseniz kısaca paylaşabilirim. Uygun olur mu?';
+  if (x.adim === 'fiyat_dustu') return 'Merhaba tekrar, ' + ilan + 'da fiyatı güncellediğinizi gördüm. Benzer dairelerin son ' + (kira ? 'kiralanma' : 'satış') + ' aralığını paylaşmamı ister misiniz?';
+  if (x.adim === 'ilan_kalkti') return 'Merhaba, ' + ilan + ' yayından kalkmış; ' + (kira ? 'kiraladınız mı' : 'sattınız mı') + ', yoksa ara mı verdiniz diye merak ettim. İleride ihtiyaç olursa yardımcı olmaktan memnuniyet duyarız.';
+  if (x.adim === 'ara') return 'ARAMA: "Merhaba, ben Sevilay, RE/MAX DEHA\'dan. ' + ilan + ' için mesaj atmıştım, ulaştı mı diye merak ettim. Bir dakikanız var mı?"\n• İlgileniyor / soru soruyor → "Özkan Bey sizi kısaca arasın, hangi saat uygun olur?"\n• Sattım / kiraladım → "Hayırlı olsun, ileride ihtiyaç olursa numaramız sizde kalsın, iyi günler."\n• Emlakçı istemiyorum → "Anlıyorum, rahatsız etmeyeyim, iyi günler."';
+  return '';
+}
+var ADIM = {ikinci_mesaj:['2. mesaj', null], fiyat_dustu:['fiyatı düştü: yeni fırsat', 'warn'], ilan_kalkti:['ilan kalktı: sor', 'warn'], ara:['ara (mesaja dönmedi)', 'bad'], birak:['3 deneme: beklemeye al', null]};
 function fsboMesaj(x){
+  if (x.emlakci_istemez) return 'Merhaba, ben Sevilay, RE/MAX DEHA Ataşehir\'den. İlanınızda emlakçıyla çalışmak istemediğinizi gördüm, saygı duyuyorum; yalnızca ' + mah(x.mahalle) + '\'de benzer dairelerin son dönemde hangi fiyatlarla satıldığını derledim. Hiçbir yükümlülük olmadan göndermemi ister misiniz?';
   var kira = /kiral/i.test(x.tur || ''), yer = x.site ? x.site : mah(x.mahalle);
   var s = 'Merhaba, ben Sevilay. RE/MAX DEHA Ataşehir\'de Özkan Gün\'ün ekibinde çalışıyorum. ' + deki(yer) + ' ' + (x.oda || '') + ' ' + (kira ? 'kiralık' : 'satılık') + ' daire ilanınızı gördüm. ';
   if (kira) s += 'Bu bölgede son dönemde dairelerin hangi aralıkta kiralandığını derleyip size gönderebilirim.';
@@ -454,25 +474,49 @@ function kopyala(text, btn){
 function sevilay(){
   loading('Liste hazırlanıyor…');
   rpc('reos_sevilay').then(function(d){
-    var sent = {}; (d.gonderilen || []).forEach(function(g){ if (g.no) sent[g.no] = g; });
-    var out = [sec('Bugün yazılacak ilanlar', d.ilanlar.length),
-      h('div', {cls:'msg', text:'1) İlanı aç, hâlâ yayında mı bak. 2) "Mesajı kopyala", sahibinden\'de ilan sahibine gönder. 3) "Gönderdim"e bas. 4) Sahip cevap verirse "Cevap geldi"ye bas ve ne dediğini yaz. Fiyat, yetki, komisyon konuşma; ilgilenirse: "Özkan Bey sizi kısaca arasın, hangi saat uygun olur?"'})];
+    var oz = d.ozet || {}, takip = d.takip || [];
+    function kaydetBtn(text, x, tur, summary, extra){
+      return h('button', {text:text, onclick:function(ev){ var b = ev.target; b.disabled = true;
+        rpc('reos_kaydet', {p:Object.assign({ref:x.url || x.no || x.id, summary:summary, stage:'Temas', channel:'mesaj', tur:tur}, extra || {})})
+          .then(function(){ b.textContent = 'Kaydedildi ✓'; }).catch(function(e){ b.disabled = false; b.textContent = 'Hata: ' + e.message; }); }});
+    }
+    var out = [h('div', {cls:'stat'}, [
+        h('div', null, [h('b', {text:String(oz.bugun_gonderilen || 0)}), h('span', {text:'bugün yazılan'})]),
+        h('div', null, [h('b', {text:String(takip.length)}), h('span', {text:'takip bekliyor'})]),
+        h('div', null, [h('b', {text:String(oz.acik || 0)}), h('span', {text:'cevapsız'})]),
+        h('div', null, [h('b', {text:String(oz.cevap || 0)}), h('span', {text:'cevap gelen'})])])];
+    out.push(sec('1) Önce takip', takip.length));
+    out.push(h('div', {cls:'m', text:'Daha önce yazdığın ilanlar. 3 gün cevap yoksa 2. mesaj; o da cevapsızsa arama; 3 denemede beklemeye al (60 gün sonra tekrar gelir). İlan kalkarsa ya da fiyat düşerse hemen burada çıkar.'}));
+    if (!takip.length) out.push(empty('Bugün takip edilecek ilan yok.'));
+    takip.forEach(function(x){
+      var msg = takipMesaj(x), cp = msg ? h('button', {cls:'pri', text:x.adim === 'ara' ? 'Konuşmayı kopyala' : 'Mesajı kopyala'}) : null;
+      if (cp) cp.addEventListener('click', function(){ kopyala(msg, cp); });
+      var a = ADIM[x.adim] || [x.adim, null];
+      out.push(h('div', {cls:'card hot'}, [
+        h('div', {cls:'row'}, [chip(a[0], a[1]), chip(x.gun + ' gün önce'), chip(x.deneme + '. deneme yapıldı')]),
+        h('div', {cls:'t', text:[mah(x.mahalle), x.site, x.oda].filter(Boolean).join(' · ')}),
+        h('div', {cls:'price', text:(x.eski_fiyat ? tl(x.eski_fiyat) + ' → ' : '') + tl(x.fiyat) + (x.no ? ' · ilan no ' + x.no : '')}),
+        msg ? h('div', {cls:'m', style:'white-space:pre-wrap;background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:8px 10px;color:var(--ink)', text:msg}) : null,
+        h('div', {cls:'acts'}, [cp, link(x.url), x.adim === 'ara' ? telLinks(x.tel) : null,
+          x.adim === 'birak' ? kaydetBtn('Beklemeye al', x, 'birak', 'Sevilay: 3 denemede cevap yok, beklemeye alındı', {stage:'Beklemede'})
+            : kaydetBtn(x.adim === 'ara' ? 'Aradım, açmadı' : 'Gönderdim', x, x.adim === 'ara' ? 'ara' : 'ikinci_mesaj', x.adim === 'ara' ? 'Sevilay aradı, ulaşamadı' : 'Sevilay takip mesajı gönderdi (' + a[0] + ')'),
+          h('button', {text:'Cevap geldi', onclick:function(){ kaydetAc(x.url || x.id, [mah(x.mahalle), x.oda].join(' '), x.tel, x.sahip, 'cevap'); document.getElementById('k_kanal').value = x.adim === 'ara' ? 'arama' : 'mesaj'; }}),
+          x.adim !== 'birak' ? kaydetBtn('Bırak', x, 'birak', 'Sevilay: takip bırakıldı', {stage:'Beklemede'}) : null])]));
+    });
+    out.push(sec('2) Bugün yazılacak yeni ilanlar', d.ilanlar.length));
+    out.push(h('div', {cls:'msg', text:'İlanı aç, hâlâ yayında mı bak → "Mesajı kopyala", sahibinden\'de gönder → "Gönderdim". Sahip cevap verirse "Cevap geldi"ye bas, ne dediğini yaz; Özkan devralır. Fiyat, yetki, komisyon konuşma.'}));
     if (!d.ilanlar.length) out.push(empty('Bugün yeni ilan yok.'));
     d.ilanlar.forEach(function(x, i){
-      var msg = fsboMesaj(x), done = sent[x.no];
+      var msg = fsboMesaj(x);
       var cp = h('button', {cls:'pri', text:'Mesajı kopyala'}); cp.addEventListener('click', function(){ kopyala(msg, cp); });
-      var card = h('div', {cls:'card' + (done ? '' : ' fsbo')}, [
+      out.push(h('div', {cls:'card fsbo'}, [
         h('div', {cls:'row'}, [chip(String(i + 1)), chip(x.tur || 'Satılık'), x.gun != null ? chip(x.gun + ' gündür yayında') : null,
-          x.eski_fiyat ? chip('fiyatı düştü', 'warn') : null, done ? chip('gönderildi ' + (done.son || ''), 'good') : null]),
+          x.eski_fiyat ? chip('fiyatı düştü', 'warn') : null, x.emlakci_istemez ? chip('emlakçı istemiyor: kibar bilgi teklifi', 'warn') : null]),
         h('div', {cls:'t', text:[mah(x.mahalle), x.site, x.oda, x.m2 ? x.m2 + ' m²' : ''].filter(Boolean).join(' · ')}),
         h('div', {cls:'price', text:(x.eski_fiyat ? tl(x.eski_fiyat) + ' → ' : '') + tl(x.fiyat) + ' · ilan no ' + (x.no || '')}),
         h('div', {cls:'m', style:'white-space:pre-wrap;background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:8px 10px;color:var(--ink)', text:msg}),
-        h('div', {cls:'acts'}, [cp, link(x.url),
-          h('button', {text:'Gönderdim', onclick:function(ev){ var b = ev.target; b.disabled = true;
-            rpc('reos_kaydet', {p:{ref:x.url || x.no, summary:'Sevilay ilk mesajı gönderdi (sahibinden)', stage:'Temas', channel:'mesaj'}})
-              .then(function(){ b.textContent = 'Kaydedildi ✓'; }).catch(function(e){ b.disabled = false; b.textContent = 'Hata: ' + e.message; }); }}),
-          h('button', {text:'Cevap geldi', onclick:function(){ kaydetAc(x.url || x.no, [mah(x.mahalle), x.oda, tl(x.fiyat)].join(' '), '', ''); document.getElementById('k_kanal').value = 'mesaj'; }})])]);
-      out.push(card);
+        h('div', {cls:'acts'}, [cp, link(x.url), kaydetBtn('Gönderdim', x, 'ilk_mesaj', 'Sevilay ilk mesajı gönderdi (sahibinden)'),
+          h('button', {text:'Cevap geldi', onclick:function(){ kaydetAc(x.url || x.no, [mah(x.mahalle), x.oda, tl(x.fiyat)].join(' '), '', '', 'cevap'); document.getElementById('k_kanal').value = 'mesaj'; }})])]));
     });
     view.replaceChildren.apply(view, out);
   }).catch(fail);
