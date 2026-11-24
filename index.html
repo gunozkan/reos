@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Özkan REOS</title>
@@ -196,6 +198,19 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
+/* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
+var SURUM = '2026.11.24c';
+function surumKontrol(){
+  fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
+    v = (v || '').trim();
+    if (v && v !== SURUM && sessionStorage.getItem('yenilendi') !== v) {
+      try { sessionStorage.setItem('yenilendi', v); } catch(e) {}
+      location.replace(location.pathname + '?v=' + encodeURIComponent(v) + location.hash);
+    }
+  }).catch(function(){});
+}
+surumKontrol();
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) surumKontrol(); });
 var SB_KEY = 'sb_publishable_cSQ9zpZCP1C7OJFTeIydrQ_PZcXJBGo';
 var sb = window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:'implicit'}});
 var ROL = null;
@@ -694,7 +709,7 @@ function basla(){
     ROL = b.rol;
     document.getElementById('nav').hidden = false;
     var hd = document.getElementById('fresh');
-    hd.replaceChildren(document.createTextNode((b.ad || b.email) + ' · '), h('a', {href:'#', style:'color:inherit', text:'çıkış', onclick:function(e){ e.preventDefault(); cikis(); }}));
+    hd.replaceChildren(document.createTextNode((b.ad || b.email) + ' · s' + SURUM.slice(5) + ' · '), h('a', {href:'#', style:'color:inherit', text:'çıkış', onclick:function(e){ e.preventDefault(); cikis(); }}));
     route();
   }).catch(function(e){ girisEkrani(e.message); });
 }
