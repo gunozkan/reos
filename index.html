@@ -633,6 +633,23 @@ function takip(){
   }).catch(fail);
 }
 
+/* ---------- sahibinden Pro açma testi ---------- */
+function protest(){
+  var no = '1314882351';
+  var adaylar = [
+    ['Normal link (iOS hangi uygulamayı seçerse)', 'https://www.sahibinden.com/ilan/' + no],
+    ['sahibindenpro://', 'sahibindenpro://ilan/' + no],
+    ['sahibinden-pro://', 'sahibinden-pro://ilan/' + no],
+    ['sahibindenpro (yalnız uygulama)', 'sahibindenpro://'],
+    ['shbpro://', 'shbpro://ilan/' + no],
+    ['sbpro://', 'sbpro://ilan/' + no],
+    ['sahibinden:// (normal uygulama, karşılaştırma için)', 'sahibinden://ilan/' + no]];
+  view.replaceChildren(sec('sahibinden Pro testi'),
+    h('div', {cls:'msg', text:'Telefonda sırayla dokun. Hangisi sahibinden Pro\'yu açarsa (ilanı açmasa da olur) o satırın adını Claude\'a yaz. "Adres geçersiz" uyarısı çıkarsa normal, o yol çalışmıyor demektir.'}),
+    h('div', {style:'display:grid;gap:8px'}, adaylar.map(function(a){ return h('a', {cls:'btn', href:a[1], text:a[0]}); })),
+    h('div', {cls:'m', text:'Bir yol daha: normal linke parmağını basılı tut; açılan menüde "sahibinden Pro\'da aç" görünüyorsa onu seç. iOS bunu sonraki linkler için hatırlayabilir.'}));
+}
+
 /* ---------- giriş ---------- */
 function girisEkrani(not){
   document.getElementById('nav').hidden = true;
@@ -660,7 +677,7 @@ function girisEkrani(not){
 function cikis(){ sb.auth.signOut().then(function(){ ROL = null; girisEkrani('Çıkış yapıldı.'); }); }
 
 /* ---------- yönlendirme ---------- */
-var R = {bugun:bugun, ilan:ilan, ara:ara, huni:huni, kisi:kisi, sevilay:sevilay, takip:takip};
+var R = {bugun:bugun, ilan:ilan, ara:ara, huni:huni, kisi:kisi, sevilay:sevilay, takip:takip, protest:protest};
 function route(){
   if (!ROL) return;
   var def = ROL === 'sevilay' ? 'sevilay' : 'bugun';
