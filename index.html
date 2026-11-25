@@ -226,7 +226,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.25h';
+var SURUM = '2026.11.25i';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -660,7 +660,7 @@ function yeniKart(x, i){
     if (araBtn) araBtn.addEventListener('click', function(){ setTimeout(function(){ kaydetAc(ref, [mah(x.mahalle), x.oda, tl(x.fiyat)].join(' '), x.tel, '', 'ara'); }, 900); });
     var slot = h('div');
     if (wa) wa.addEventListener('click', function(){ rpc('reos_kaydet', {p:{ref:ref, summary:'WhatsApp\'tan ilk mesaj gönderildi', channel:'whatsapp', tur:'ilk_mesaj'}})
-      .then(function(){ card.classList.remove('fsbo'); slot.replaceChildren(geriAlKutusu(ref, function(){ card.classList.add('fsbo'); })); }); });
+      .then(function(){ card.classList.remove('fsbo'); slot.replaceChildren(h('div', {cls:'msg', text:'Gönderildi. Bu ilan artık Takip sekmesinde; sahip cevap verirse orada "cevap verdi" etiketiyle görünür.'}), geriAlKutusu(ref, function(){ card.classList.add('fsbo'); })); }); });
     card.replaceChildren.apply(card, [
       h('div', {cls:'row'}, [chip(String(i + 1)), chip(x.tur || 'Satılık'), x.gun != null ? chip(x.gun + ' gündür yayında') : null,
         x.eski_fiyat ? chip('fiyatı düştü', 'warn') : null, x.emlakci_istemez ? chip('emlakçı istemiyor: kibar bilgi teklifi', 'warn') : null, x.derece ? chip('satıcı ' + x.derece) : null]),
@@ -686,7 +686,7 @@ function sevilay(){
         h('div', null, [h('b', {text:String((d.takip || []).length)}), h('span', {text:'takip bekliyor'})]),
         h('div', null, [h('b', {text:String(oz.acik || 0)}), h('span', {text:'cevapsız'})]),
         h('div', null, [h('b', {text:String(oz.cevap || 0)}), h('span', {text:'cevap gelen'})])])];
-    if ((d.takip || []).length) out.push(h('a', {cls:'btn', href:'#takip', text:'Önce takip: ' + d.takip.length + ' ilan bugün senden haber bekliyor →'}));
+    out.push(h('a', {cls:'btn pri', href:'#takip', style:'justify-content:center', text:'Mesaj attığın ilanlar Takip sekmesinde' + ((oz.cevap || 0) ? ' · ' + oz.cevap + ' tanesi cevap verdi' : '') + ((d.takip || []).length ? ' · bugün ' + d.takip.length + ' takip' : '') + ' →'}));
     out.push(sec('Bugün aranacaklar', d.ilanlar.length, 'Bugün ilk kez temas edilecek sahibinden ilanlar (yakın bölge, dubleks yok). Önce ARA; açmazsa WhatsApp mesajını gönder. Gönderdiğin ilan Takip\'e geçer.'));
     out.push(h('div', {cls:'msg', text:'Telefon varsa ve saat 10:00–19:00 arasıysa önce büyük ARA düğmesine bas; açmazsa "WhatsApp\'ta gönder". Mesaj hazır açılır, sen yalnız gönder\'e basarsın; gönderim kendiliğinden kaydolur. Cevapsız mesajın ardından ikinci mesaj atılmaz, ARANIR. Telefon yoksa ilanı aç, numarayı ekle ya da sahibinden\'den mesaj gönder ve "Sahibinden\'den gönderdim"e bas. Gönderilen ilan Takip sekmesine geçer. Fiyat, yetki, komisyon konuşma.'}));
     if (!d.ilanlar.length) out.push(empty('Bugün yeni ilan yok.'));
