@@ -212,7 +212,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.25b';
+var SURUM = '2026.11.25c';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -321,10 +321,7 @@ function bugun(){
     out.push(sec('Görevler (bugün + yarın + geciken)', d.gorevler.length));
     if (!d.gorevler.length) out.push(empty('Açık görev yok.'));
     d.gorevler.forEach(function(t){
-      out.push(h('div', {cls:'card'}, [
-        h('div', {cls:'row'}, [chip(t.id), chip(fmtDate(t.tarih) + (t.saat ? ' ' + t.saat : ''), t.tarih < new Date().toISOString().slice(0,10) ? 'bad' : 'warn'), chip(t.durum)]),
-        h('div', {cls:'t', text:t.is}),
-        telLinks(t.tel)]));
+      out.push(gorevKart(t));
     });
 
     var rest = ev.filter(function(r){ return r[1] !== 'pazar_ozeti' && r[1] !== 'haftalik_huni'; });
@@ -378,6 +375,28 @@ function bugun(){
   }).catch(fail);
 }
 
+function gorevKart(t){
+  var card = h('div', {cls:'card'}), not = h('textarea', {placeholder:'Not (mikrofonla da söyleyebilirsin). Örn: "ulaşılamıyor", "2 hafta sonra", "konuştum, tamam"', style:'min-height:56px'});
+  var res = h('div', {cls:'m'});
+  function gonder(islem, btn){ var v = not.value.trim(); if (islem === 'not' && !v) { res.textContent = 'Önce bir not gir.'; return; }
+    btn.disabled = true; res.textContent = 'Kaydediliyor…';
+    rpc('reos_gorev', {p:{id:t.id, islem:islem, not:v}}).then(function(r){
+      res.textContent = r.ok ? r.mesaj : (r.neden || 'Kaydedilemedi');
+      if (r.ok && r.durum !== 'Açık') { card.style.opacity = .55; [].forEach.call(card.querySelectorAll('button,textarea'), function(e){ e.disabled = true; }); }
+      else btn.disabled = false; }).catch(function(e){ btn.disabled = false; res.textContent = e.message; }); }
+  var bK = h('button', {cls:'pri', text:'Kapat'}), bE = h('button', {text:'Ertele'}), bN = h('button', {text:'Notu kaydet'});
+  bK.addEventListener('click', function(){ gonder('kapat', bK); });
+  bE.addEventListener('click', function(){ gonder('ertele', bE); });
+  bN.addEventListener('click', function(){ gonder('not', bN); });
+  card.replaceChildren.apply(card, [
+    h('div', {cls:'row'}, [chip(t.id), chip(fmtDate(t.tarih) + (t.saat ? ' ' + t.saat : ''), t.tarih < new Date().toISOString().slice(0,10) ? 'bad' : 'warn'), chip(t.durum), t.ad ? chip(t.ad) : null]),
+    h('div', {cls:'t', text:t.is}),
+    t.not ? h('div', {cls:'m', text:'Son not: ' + t.not}) : null,
+    telLinks(t.tel), not,
+    h('div', {cls:'m', text:'Notu sistem okur: "ulaşılamıyor / vazgeçti / dönmüyor" kapatır ve görev bir daha çıkmaz; "2 hafta sonra", "yarın" erteler. Ertele\'ye boş basarsan 2 gün sonraya atar.'}),
+    h('div', {cls:'acts'}, [bN, bE, bK]), res].filter(Boolean));
+  return card;
+}
 /* ---------- İlan sorgula ---------- */
 var pendingIlan = '';
 function goIlan(q){ pendingIlan = q; if (location.hash === '#ilan') ilan(); else location.hash = '#ilan'; }
