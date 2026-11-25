@@ -89,22 +89,30 @@ table.em th,table.em td{border-bottom:1px solid var(--line);padding:4px 6px;text
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);width:min(520px,94vw);padding:16px}
 dialog::backdrop{background:rgba(0,0,0,.45)}
 .spin{color:var(--muted);font-size:14px}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+#menuBtn{font-size:20px;line-height:1;padding:6px 10px}
+#menu{position:fixed;top:52px;right:8px;z-index:7;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);display:grid;min-width:210px;padding:6px}
+#menu[hidden]{display:none}
+#menu a{padding:10px 12px;color:var(--ink);text-decoration:none;font-weight:600;border-radius:8px}
+#menu a:hover{background:var(--chip)}
+.btn.ara{background:var(--good);border-color:var(--good);color:#fff;font-size:16px;padding:10px 20px}
 @media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Özkan REOS</h1>
-  <div class="fresh" id="fresh">Yükleniyor…</div>
+  <div><h1>Özkan REOS</h1><div class="fresh" id="fresh">Yükleniyor…</div></div>
+  <button id="menuBtn" type="button" aria-label="Menü" aria-expanded="false" hidden>☰</button>
 </header>
+<div id="menu" hidden></div>
 <main id="view"><div class="spin">Yükleniyor…</div></main>
 <nav id="nav" hidden>
-  <a href="#bugun" data-r="ozkan">Bugün</a><a href="#takip" data-r="ozkan sevilay">Takip</a><a href="#sevilay" data-r="ozkan sevilay">Yeni ilanlar</a><a href="#ara" data-r="ozkan">Ara</a><a href="#ilan" data-r="ozkan">İlan</a><a href="#kisi" data-r="ozkan">Kişi</a>
+  <a href="#bugun" data-r="ozkan">Bugün</a><a href="#sevilay" data-r="ozkan uye">Bugün aranacaklar</a><a href="#takip" data-r="ozkan uye">Takip</a><a href="#ara" data-r="ozkan">Alıcıya ara</a><a href="#ilan" data-r="ozkan">İlan</a>
 </nav>
 
 <dialog id="dlg">
   <form id="kform" class="q" method="dialog">
-    <div class="t" id="kbaslik">Sonuç kaydet</div>
+    <div class="t" id="kbaslik">Sonucu kaydet</div>
     <div class="m" id="kref"></div>
     <label for="k_sonuc">Sonuç
       <select id="k_sonuc"><option value="">Seç (isteğe bağlı)</option><option value="cevap_yok">Cevap yok</option><option value="ulasilamadi">Aradım, ulaşılamadı</option><option value="dusunecek">Düşünecek</option><option value="olumlu">Olumlu / görüşmek istiyor</option><option value="randevu">Randevu verildi</option><option value="istemiyor">İstemiyor</option><option value="satti">Sattı / kiraladı</option></select></label>
@@ -120,7 +128,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
       <label for="k_kanal">Kanal
         <select id="k_kanal"><option value="whatsapp">WhatsApp</option><option value="arama">Telefon</option><option value="sahibinden">Sahibinden mesajı</option><option value="mesaj">Diğer mesaj</option><option value="gorusme">Yüz yüze</option></select></label>
       <label for="k_kim">Kim
-        <select id="k_kim"><option>Özkan</option><option>Sevilay</option></select></label>
+        <select id="k_kim"><option>Özkan</option></select></label>
     </div>
     <label for="k_adim">Sonraki adım (isteğe bağlı)<input id="k_adim" placeholder="Örn: değerleme raporuyla görüş"></label>
     <label for="k_neden">Kayıpsa neden<input id="k_neden" placeholder="Örn: emlakçı istemiyor"></label>
@@ -182,7 +190,7 @@ function nedenPanel(fid){
         h('table', {cls:'em'}, [h('tr', null, [h('th', {text:'Kalem'}), h('th', {text:'Puan'}), h('th', {text:'Açıklama'})]),
           h('tr', null, [h('td', {text:'Başlangıç'}), h('td', {text:'50'}), h('td', {text:''})])].concat(pk.map(function(x){
           return h('tr', null, [h('td', {text:x.k}), h('td', {text:isaret(x.p)}), h('td', {text:x.n || ''})]); }))),
-        pu.alici ? h('div', {cls:'m', text:'Uyan alıcı: ' + pu.alici + (pu.alicilar ? ' · ' + pu.alicilar : '') + ' (alıcı uyumu 100 = ilçe 25 + site/mahalle 25 + oda 20 + bütçe 30)'}) : null]));
+        (pu.alici && ROL === 'ozkan') ? h('div', {cls:'m', text:'Uyan alıcı: ' + pu.alici + (pu.alicilar ? ' · ' + pu.alicilar : '') + ' (alıcı uyumu 100 = ilçe 25 + site/mahalle 25 + oda 20 + bütçe 30)'}) : null]));
       kids.push(h('div', null, [h('div', {cls:'t', text:'Önerilen fiyat: ' + (y.oneri ? tl(y.oneri) : 'hesaplanamadı')}), h('div', {cls:'m', text:'Kaynak: ' + (y.kaynak || '?')}),
         n.emsal && n.emsal.metin ? h('div', {cls:'m', text:n.emsal.metin}) : null]));
       var em = n.emsaller || [];
@@ -204,7 +212,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.25a';
+var SURUM = '2026.11.25b';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -218,7 +226,11 @@ surumKontrol();
 document.addEventListener('visibilitychange', function(){ if (!document.hidden) surumKontrol(); });
 var SB_KEY = 'sb_publishable_cSQ9zpZCP1C7OJFTeIydrQ_PZcXJBGo';
 var sb = window.supabase.createClient(SB_URL, SB_KEY, {auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, flowType:'implicit'}});
-var ROL = null;
+var ROL = null, AD = '', OFIS = '', EKIP = [];
+function yonelme(ad){ ad = String(ad || ''); var v = (ad.toLowerCase().match(/[aeıioöuü]/g) || ['a']).pop(), son = ad.slice(-1).toLowerCase(), ince = 'eiöü'.indexOf(v) >= 0;
+  return ad + '\'' + ('aeıioöuü'.indexOf(son) >= 0 ? (ince ? 'ye' : 'ya') : (ince ? 'e' : 'a')); }
+function uyeMi(){ return ROL === 'uye'; }
+function kimim(){ return AD === 'Özkan' ? {ad:'Özkan Gün', giris:'Merhaba, ben Özkan Gün, RE/MAX DEHA Ataşehir\'den. ', arayan:'ben'} : {ad:AD, giris:'Merhaba, ben ' + AD + '. ' + (OFIS || 'RE/MAX') + '\'de Özkan Gün\'ün ekibinde çalışıyorum. ', arayan:'Özkan Bey'}; }
 function rpc(name, args){
   return sb.rpc(name, args || {}).then(function(r){
     if (r.error) {
@@ -239,8 +251,9 @@ function kaydetAc(ref, baslik, phone, name, tur){
   document.getElementById('kbaslik').textContent = 'Sonuç kaydet: ' + (baslik || ref || '');
   document.getElementById('kref').textContent = ref ? ('Kayıt: ' + ref) : '';
   ['k_ozet','k_tarih','k_adim','k_neden','k_sonuc'].forEach(function(id){ document.getElementById(id).value = ''; });
-  document.getElementById('k_asama_l').hidden = ROL === 'sevilay';
-  document.getElementById('k_kim').value = ROL === 'sevilay' ? 'Sevilay' : 'Özkan';
+  document.getElementById('k_asama_l').hidden = uyeMi();
+  document.getElementById('k_kim').value = uyeMi() ? AD : 'Özkan'; document.getElementById('k_kim').disabled = uyeMi();
+  document.getElementById('k_kanal').value = /^ara/.test(tur || '') ? 'arama' : 'whatsapp';
   document.getElementById('k_asama').value = '';
   document.getElementById('kres').textContent = '';
   document.getElementById('ksave').disabled = false;
@@ -255,7 +268,7 @@ document.getElementById('kform').addEventListener('submit', function(ev){
     reason: document.getElementById('k_neden').value.trim(), channel: document.getElementById('k_kanal').value,
     by: document.getElementById('k_kim').value, tur: curRef.tur};
   if (!p.summary && p.sonuc) p.summary = document.getElementById('k_sonuc').selectedOptions[0].textContent;
-  if (!p.summary) { document.getElementById('kres').textContent = 'Sonucu seç ya da bir cümleyle yaz.'; return; }
+  if (!p.summary) { document.getElementById('kres').textContent = 'Sonucu seç ya da bir cümleyle anlat (mikrofonla da olur).'; return; }
   Object.keys(p).forEach(function(k){ if (p[k] === '') delete p[k]; });
   var btn = document.getElementById('ksave'); btn.disabled = true;
   document.getElementById('kres').textContent = 'Kaydediliyor…';
@@ -287,13 +300,13 @@ function bugun(){
     ozet.forEach(function(r){ out.push(h('div', {cls:'msg', text:r[13]})); });
 
     if ((d.devral || []).length) {
-      out.push(sec('Sevilay\'dan devral: sahip cevap verdi', d.devral.length));
+      out.push(sec('Ekipten devral: sahip cevap verdi', d.devral.length));
       d.devral.forEach(function(p){ out.push(h('div', {cls:'card hot'}, [
         h('div', {cls:'row'}, [chip(p.id), chip('cevap ' + (p.cevap || ''), 'warn')]),
         h('div', {cls:'t', text:(p.ad ? p.ad + ' · ' : '') + (p.baslik || '')}),
         p.fiyat ? h('div', {cls:'price', text:tl(p.fiyat)}) : null,
         p.not ? h('div', {cls:'m', text:p.not}) : null,
-        h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonuç yaz', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])])); });
+        h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])])); });
     }
     out.push(sec('Takip günü gelenler', d.takip.length));
     if (!d.takip.length) out.push(empty('Bugün takip günü gelen huni kaydı yok.'));
@@ -302,7 +315,7 @@ function bugun(){
         h('div', {cls:'row'}, [chip(p.id), chip(p.asama), p.gecikme > 0 ? chip(p.gecikme + ' gün gecikti', 'bad') : chip('bugün', 'warn')]),
         h('div', {cls:'t', text:(p.ad ? p.ad + ' · ' : '') + (p.baslik || '')}),
         p.adim ? h('div', {cls:'m', text:'Yapılacak: ' + p.adim}) : null,
-        h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonuç yaz', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])]));
+        h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])]));
     });
 
     out.push(sec('Görevler (bugün + yarın + geciken)', d.gorevler.length));
@@ -357,7 +370,7 @@ function bugun(){
           r[13] ? h('div', {cls:'m', text:r[13]}) : null,
           h('div', {cls:'acts'}, [telLinks(r[8]), link(r[12]),
             r[12] ? h('button', {text:'Değerle', onclick:function(){ goIlan(r[12]); }}) : null,
-            (tp === 'arama_onerisi' || r[6] === 'FSBO') ? h('button', {cls:'pri', text:'Sonuç yaz', onclick:function(){ kaydetAc(r[12] || r[2], r[3], '', ''); }}) : null])]));
+            (tp === 'arama_onerisi' || r[6] === 'FSBO') ? h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(r[12] || r[2], r[3], '', ''); }}) : null])]));
       });
       det.appendChild(box); out.push(det);
     });
@@ -397,7 +410,7 @@ function ilan(){
           s.neden ? h('div', {cls:'m', text:'Satıcı: ' + s.neden}) : null,
           nedenPanel(l.fizbot_id),
           h('div', {cls:'acts'}, [telLinks(l.tel1), link(l.url), noKopya(l.no), link(l.fizbot_url, 'Fizbot'),
-            h('button', {cls:'pri', text:'Sonuç yaz', onclick:function(){ kaydetAc(l.fizbot_id || l.url || l.no, [l.mahalle, l.oda, tl(l.fiyat)].join(' '), l.tel1, l.ilan_sahibi); }})])])];
+            h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(l.fizbot_id || l.url || l.no, [l.mahalle, l.oda, tl(l.fiyat)].join(' '), l.tel1, l.ilan_sahibi); }})])])];
       var g = d.deg || {};
       if (g.oneri || g.yorum) kids.push(h('div', {cls:'card' + (/FSBO/.test(l.sahiplik || '') ? ' fsbo' : '')}, [
         h('div', {cls:'t', text:'Önerilen fiyat'}),
@@ -461,7 +474,7 @@ function ara(){
         (r.deg && r.deg.kaynak) ? h('div', {cls:'m', text:'Kaynak: ' + r.deg.kaynak}) : null,
         nedenPanel(r.fid),
         h('div', {cls:'acts'}, [telLinks(r.tel), link(r.url), noKopya(r.no), h('button', {text:'Ayrıntı', onclick:function(){ goIlan(r.url || r.no); }}),
-          r.fsbo ? h('button', {cls:'pri', text:'Sonuç yaz', onclick:function(){ kaydetAc(r.fid || r.url || r.no, [r.mahalle, r.oda, tl(r.fiyat)].join(' '), r.tel, r.ad); }}) : null])])); });
+          r.fsbo ? h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(r.fid || r.url || r.no, [r.mahalle, r.oda, tl(r.fiyat)].join(' '), r.tel, r.ad); }}) : null])])); });
       if (!d.rows.length) kids.push(empty('Bu kriterle aktif ilan yok. Bütçeyi ya da odayı genişlet.'));
       res.replaceChildren.apply(res, kids);
     }).catch(function(e){ res.replaceChildren(h('div', {cls:'msg err', text:'Aranamadı: ' + e.message})); });
@@ -472,7 +485,7 @@ function ara(){
 function huni(){
   loading('Huni getiriliyor…');
   rpc('reos_huni').then(function(rows){
-    var out = [sec('Portföy hunisi', rows.length), h('div', {cls:'m', text:'Yetki → Görüşme → Temas → Beklemede → Aday. Aradıktan sonra "Sonuç yaz"a bas.'})];
+    var out = [sec('Portföy hunisi', rows.length), h('div', {cls:'m', text:'Yetki → Görüşme → Temas → Beklemede → Aday. Aradıktan sonra "Sonucu kaydet"e bas.'})];
     var cur = null;
     rows.forEach(function(p){
       if (p.asama !== cur) { cur = p.asama; out.push(h('h2', {text:cur})); }
@@ -482,7 +495,7 @@ function huni(){
         h('div', {cls:'t', text:(p.ad ? p.ad + ' · ' : '') + (p.baslik || '')}),
         p.fiyat ? h('div', {cls:'price', text:tl(p.fiyat)}) : null,
         p.adim ? h('div', {cls:'m', text:'Sonraki: ' + p.adim}) : null,
-        h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonuç yaz', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])]));
+        h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])]));
     });
     view.replaceChildren.apply(view, out);
   }).catch(fail);
@@ -543,17 +556,20 @@ function mah(m){ return String(m || '').replace(/ Mahallesi$/i, ''); }
 function yerAdi(x){ return x.site ? x.site : mah(x.mahalle); }
 function takipMesaj(x){
   var kira = /kiral/i.test(x.tur || ''), yer = deki(yerAdi(x)), ilan = yer + ' ' + (x.oda || '') + ' ' + (kira ? 'kiralık' : 'satılık') + ' ilanınız';
+  var ben = kimim();
+  if (x.adim === 'ulasamadim') return 'Merhaba, ' + ilan + ' için sizi aradım ama ulaşamadım. Uygun olduğunuz bir saati yazarsanız kısaca arayayım; 2 dakikanızı alır.';
+  if (x.adim === 'ara' || x.adim === 'ara2') return 'ARAMA' + (x.adim === 'ara2' ? ' (başka saatte)' : '') + ': "Merhaba, ben ' + ben.ad + ', RE/MAX\'tan. ' + ilan + ' için size ulaşmak istedim. Bir dakikanız var mı?"\n• İlgileniyor / soru soruyor → ' + (ben.arayan === 'ben' ? '"Size kısaca anlatayım, ne zaman uygunsunuz?"' : '"Özkan Bey sizi kısaca arasın, hangi saat uygun olur?"') + '\n• Sattım / kiraladım → "Hayırlı olsun, ileride ihtiyaç olursa numaramız sizde kalsın, iyi günler."\n• Emlakçı istemiyorum → "Anlıyorum, rahatsız etmeyeyim, iyi günler."';
   if (x.adim === 'ikinci_mesaj') return 'Merhaba tekrar, ' + ilan + ' için birkaç gün önce yazmıştım. ' + (kira ? 'Bu bölgede son dönemde dairelerin hangi aralıkta kiralandığını çıkardım; ' : 'Bu mahallede son aylarda gerçekleşen satışların fiyat aralığını çıkardım; ') + 'ilanınızın nerede durduğunu görmek isterseniz kısaca paylaşabilirim. Uygun olur mu?';
   if (x.adim === 'fiyat_dustu') return 'Merhaba tekrar, ' + ilan + 'da fiyatı güncellediğinizi gördüm. Benzer dairelerin son ' + (kira ? 'kiralanma' : 'satış') + ' aralığını paylaşmamı ister misiniz?';
   if (x.adim === 'ilan_kalkti') return 'Merhaba, ' + ilan + ' yayından kalkmış; ' + (kira ? 'kiraladınız mı' : 'sattınız mı') + ', yoksa ara mı verdiniz diye merak ettim. İleride ihtiyaç olursa yardımcı olmaktan memnuniyet duyarız.';
-  if (x.adim === 'ara') return 'ARAMA: "Merhaba, ben Sevilay, RE/MAX DEHA\'dan. ' + ilan + ' için mesaj atmıştım, ulaştı mı diye merak ettim. Bir dakikanız var mı?"\n• İlgileniyor / soru soruyor → "Özkan Bey sizi kısaca arasın, hangi saat uygun olur?"\n• Sattım / kiraladım → "Hayırlı olsun, ileride ihtiyaç olursa numaramız sizde kalsın, iyi günler."\n• Emlakçı istemiyorum → "Anlıyorum, rahatsız etmeyeyim, iyi günler."';
   return '';
 }
-var ADIM = {ikinci_mesaj:['2. mesaj', null], fiyat_dustu:['fiyatı düştü: yeni fırsat', 'warn'], ilan_kalkti:['ilan kalktı: sor', 'warn'], ara:['ara (mesaja dönmedi)', 'bad'], birak:['3 deneme: beklemeye al', null]};
+var ADIM = {ulasamadim:['"aradım, ulaşamadım" mesajı', null], ara2:['başka saatte ARA', 'bad'], ikinci_mesaj:['2. mesaj', null], fiyat_dustu:['fiyatı düştü: yeni fırsat', 'warn'], ilan_kalkti:['ilan kalktı: sor', 'warn'], ara:['ARA (mesaja dönmedi)', 'bad'], birak:['5 deneme: 30 gün beklemeye al', null]};
 function fsboMesaj(x){
-  if (x.emlakci_istemez) return 'Merhaba, ben Sevilay, RE/MAX DEHA Ataşehir\'den. İlanınızda emlakçıyla çalışmak istemediğinizi gördüm, saygı duyuyorum; yalnızca ' + mah(x.mahalle) + '\'de benzer dairelerin son dönemde hangi fiyatlarla satıldığını derledim. Hiçbir yükümlülük olmadan göndermemi ister misiniz?';
+  var ben = kimim();
+  if (x.emlakci_istemez) return ben.giris + 'İlanınızda emlakçıyla çalışmak istemediğinizi gördüm, saygı duyuyorum; yalnızca ' + mah(x.mahalle) + '\'de benzer dairelerin son dönemde hangi fiyatlarla satıldığını derledim. Hiçbir yükümlülük olmadan göndermemi ister misiniz?';
   var kira = /kiral/i.test(x.tur || ''), yer = x.site ? x.site : mah(x.mahalle);
-  var s = 'Merhaba, ben Sevilay. RE/MAX DEHA Ataşehir\'de Özkan Gün\'ün ekibinde çalışıyorum. ' + deki(yer) + ' ' + (x.oda || '') + ' ' + (kira ? 'kiralık' : 'satılık') + ' daire ilanınızı gördüm. ';
+  var s = ben.giris + deki(yer) + ' ' + (x.oda || '') + ' ' + (kira ? 'kiralık' : 'satılık') + ' daire ilanınızı gördüm. ';
   if (kira) s += 'Bu bölgede son dönemde dairelerin hangi aralıkta kiralandığını derleyip size gönderebilirim.';
   else if (x.eski_fiyat) s += 'Bu mahallede benzer ilanların son dönemde hangi fiyatlarda ilgi gördüğünü derleyip size gönderebilirim.';
   else s += 'Mahalledeki benzer ilanların kaç gündür yayında olduğunu ve alıcıların nelere baktığını gösteren kısa bir özet hazırlayabilirim.';
@@ -586,7 +602,10 @@ function yeniKart(x, i){
   var msg = fsboMesaj(x), ref = x.fid || x.url || x.no, card = h('div', {cls:'card fsbo'});
   function ciz(){
     var cp = h('button', {text:'Mesajı kopyala'}); cp.addEventListener('click', function(){ kopyala(msg, cp); });
-    var wa = x.tel ? h('a', {cls:'btn pri', href:waLink(x.tel, msg), target:'_blank', rel:'noopener', text:'WhatsApp\'ta gönder'}) : null;
+    var saat = new Date().getHours(), araSaati = x.tel && saat >= 10 && saat < 19;
+    var wa = x.tel ? h('a', {cls:'btn' + (araSaati ? '' : ' pri'), href:waLink(x.tel, msg), target:'_blank', rel:'noopener', text:'WhatsApp\'ta gönder'}) : null;
+    var araBtn = araSaati ? h('a', {cls:'btn ara', href:'tel:+90' + digits(x.tel), text:'ARA'}) : null;
+    if (araBtn) araBtn.addEventListener('click', function(){ setTimeout(function(){ kaydetAc(ref, [mah(x.mahalle), x.oda, tl(x.fiyat)].join(' '), x.tel, '', 'ara'); }, 900); });
     var slot = h('div');
     if (wa) wa.addEventListener('click', function(){ rpc('reos_kaydet', {p:{ref:ref, summary:'WhatsApp\'tan ilk mesaj gönderildi', channel:'whatsapp', tur:'ilk_mesaj'}})
       .then(function(){ card.classList.remove('fsbo'); slot.replaceChildren(geriAlKutusu(ref, function(){ card.classList.add('fsbo'); })); }); });
@@ -596,9 +615,10 @@ function yeniKart(x, i){
       h('div', {cls:'t', text:[mah(x.mahalle), x.site, x.oda, x.m2 ? x.m2 + ' m²' : ''].filter(Boolean).join(' · ')}),
       h('div', {cls:'price', text:(x.eski_fiyat ? tl(x.eski_fiyat) + ' → ' : '') + tl(x.fiyat) + ' · ilan no ' + (x.no || '')}),
       h('div', {cls:'msgbox', text:msg}),
-      x.tel ? null : h('div', {cls:'m', text:'Telefon kayıtlı değil: ilanı aç, numarayı buraya yapıştır; WhatsApp düğmesi çıkar. Numara yoksa sahibinden\'den yaz.'}),
+      x.tel ? null : h('div', {cls:'m', text:'Telefon kayıtlı değil: ilanı aç, numarayı buraya yapıştır; WhatsApp düğmesi çıkar. Numara yoksa sahibinden\'den mesaj gönder.'}),
       x.tel ? null : telEkle(ref, function(t){ x.tel = t; ciz(); }),
-      h('div', {cls:'acts'}, [wa, link(x.url), noKopya(x.no), cp,
+      araSaati ? h('div', {cls:'m', text:'Saat 10:00–19:00 arası: önce ARA. Açmazsa WhatsApp mesajını gönder.'}) : null,
+      h('div', {cls:'acts'}, [araBtn, wa, link(x.url), noKopya(x.no), cp,
         kayitBtn(x.tel ? 'Başka yoldan gönderdim' : 'Sahibinden\'den gönderdim', ref, {summary:'İlk mesaj gönderildi (' + (x.tel ? 'diğer' : 'sahibinden') + ')', channel:x.tel ? 'mesaj' : 'sahibinden', tur:'ilk_mesaj'}, function(){ card.classList.remove('fsbo'); }),
         h('button', {text:'Cevap geldi', onclick:function(){ kaydetAc(ref, [mah(x.mahalle), x.oda, tl(x.fiyat)].join(' '), x.tel, '', 'cevap'); }})]),
       slot, nedenPanel(x.fid)].filter(Boolean));
@@ -610,13 +630,13 @@ function sevilay(){
   rpc('reos_sevilay').then(function(d){
     var oz = d.ozet || {};
     var out = [h('div', {cls:'stat'}, [
-        h('div', null, [h('b', {text:String(oz.bugun_gonderilen || 0)}), h('span', {text:'bugün yazılan'})]),
+        h('div', null, [h('b', {text:String(oz.bugun_gonderilen || 0)}), h('span', {text:'bugün temas'})]),
         h('div', null, [h('b', {text:String((d.takip || []).length)}), h('span', {text:'takip bekliyor'})]),
         h('div', null, [h('b', {text:String(oz.acik || 0)}), h('span', {text:'cevapsız'})]),
         h('div', null, [h('b', {text:String(oz.cevap || 0)}), h('span', {text:'cevap gelen'})])])];
     if ((d.takip || []).length) out.push(h('a', {cls:'btn', href:'#takip', text:'Önce takip: ' + d.takip.length + ' ilan bugün senden haber bekliyor →'}));
-    out.push(sec('Bugün yazılacak yeni ilanlar', d.ilanlar.length));
-    out.push(h('div', {cls:'msg', text:'Telefon varsa "WhatsApp\'ta gönder": mesaj hazır açılır, sen yalnız gönder\'e basarsın; gönderim kendiliğinden kaydolur. Telefon yoksa ilanı aç, numarayı ekle ya da sahibinden\'den yaz ve "Sahibinden\'den gönderdim"e bas. Gönderilen ilan Takip sekmesine geçer. Fiyat, yetki, komisyon konuşma.'}));
+    out.push(sec('Bugün aranacaklar', d.ilanlar.length));
+    out.push(h('div', {cls:'msg', text:'Telefon varsa ve saat 10:00–19:00 arasıysa önce büyük ARA düğmesine bas; açmazsa "WhatsApp\'ta gönder". Mesaj hazır açılır, sen yalnız gönder\'e basarsın; gönderim kendiliğinden kaydolur. Cevapsız mesajın ardından ikinci mesaj atılmaz, ARANIR. Telefon yoksa ilanı aç, numarayı ekle ya da sahibinden\'den mesaj gönder ve "Sahibinden\'den gönderdim"e bas. Gönderilen ilan Takip sekmesine geçer. Fiyat, yetki, komisyon konuşma.'}));
     if (!d.ilanlar.length) out.push(empty('Bugün yeni ilan yok.'));
     d.ilanlar.forEach(function(x, i){ out.push(yeniKart(x, i)); });
     view.replaceChildren.apply(view, out);
@@ -629,12 +649,12 @@ function takipAdim(x){
   if (x.ilan_kalkti) return 'ilan_kalkti';
   if (x.eski_fiyat) return 'fiyat_dustu';
   if (x.cevap) return null;
-  if (x.deneme >= 3) return 'birak';
-  if (x.deneme >= 2) return 'ara';
-  return 'ikinci_mesaj';
+  var n = x.deneme || 0;
+  if (n >= 5) return 'birak';
+  return ['ara', 'ara', 'ara2', 'ulasamadim', 'ara'][n];
 }
 function takip(){
-  if (!takipFiltre.kim) takipFiltre.kim = ROL === 'sevilay' ? 'Sevilay' : 'hepsi';
+  if (!takipFiltre.kim) takipFiltre.kim = 'hepsi';
   loading('Takip listesi getiriliyor…');
   rpc('reos_takip', {p:takipFiltre}).then(function(d){
     var say = d.say || {};
@@ -642,14 +662,15 @@ function takip(){
     var out = [sec('FSBO takip'),
       h('div', {cls:'seg'}, [segBtn('durum','bugun','Bugün (' + (say.bugun || 0) + ')'), segBtn('durum','devral','Cevap verdi (' + (say.devral || 0) + ')'),
         segBtn('durum','cevap','Cevap bekleyen (' + (say.cevap || 0) + ')'), segBtn('durum','hepsi','Açık hepsi (' + (say.hepsi || 0) + ')'), segBtn('durum','kapanan','Kapanan (' + (say.kapanan || 0) + ')')]),
-      h('div', {cls:'seg'}, [segBtn('kim','hepsi','Herkes'), segBtn('kim','Özkan','Özkan'), segBtn('kim','Sevilay','Sevilay')]),
+      uyeMi() ? null : h('label', {'for':'kimSec'}, ['Kim', (function(){ var sel = h('select', {id:'kimSec'}, [h('option', {value:'hepsi', text:'Herkes'}), h('option', {value:'ben', text:'Ben'})].concat(EKIP.filter(function(e){ return e.ad !== 'Özkan'; }).map(function(e){ return h('option', {value:e.ad, text:e.ad + ' (' + ({asistan:'asistan', danisman:'danışman'}[e.rol] || e.rol) + ')'}); })));
+        sel.value = takipFiltre.kim; sel.addEventListener('change', function(){ takipFiltre.kim = sel.value; takip(); }); return sel; })()]),
       h('div', {cls:'m', text:'Bugün ' + (say.bugun_yazilan || 0) + ' temas kaydedildi. Sıra: önce cevap verenler, sonra takip tarihi gelenler. Sonraki tarih ve adım sonuçtan otomatik doluyor.'})];
     if (!d.rows.length) out.push(empty('Bu filtrede kayıt yok.'));
     d.rows.forEach(function(x){
       var adim = takipAdim(x), msg = adim && adim !== 'birak' ? takipMesaj({adim:adim, tur:x.tur, mahalle:x.mahalle, site:x.site, oda:x.oda}) : '';
       var ref = x.id, gec = x.kalan != null && x.kalan < 0;
       var kids = [
-        h('div', {cls:'row'}, [chip(x.id), chip(x.kim, x.kim === 'Sevilay' ? null : 'good'), chip(x.asama), x.cevap ? chip('cevap verdi', 'warn') : null,
+        h('div', {cls:'row'}, [chip(x.id), chip(x.kim, x.kim === 'Özkan' ? 'good' : null), chip(x.asama), x.cevap ? chip('cevap verdi', 'warn') : null,
           x.ilan_kalkti ? chip('ilan kalktı', 'bad') : null, x.eski_fiyat ? chip('fiyatı düştü', 'warn') : null,
           x.takip ? chip((gec ? 'gecikti ' : 'takip ') + fmtDate(x.takip), gec ? 'bad' : (x.kalan === 0 ? 'warn' : null)) : null]),
         h('div', {cls:'t', text:[mah(x.mahalle), x.site, x.oda].filter(Boolean).join(' · ') || x.baslik}),
@@ -660,19 +681,24 @@ function takip(){
         msg ? h('div', {cls:'msgbox', text:msg}) : null];
       var cp = msg ? h('button', {text:adim === 'ara' ? 'Konuşmayı kopyala' : 'Mesajı kopyala'}) : null;
       if (cp) cp.addEventListener('click', function(){ kopyala(msg, cp); });
-      var wa = (x.tel && msg && adim !== 'ara') ? h('a', {cls:'btn pri', href:waLink(x.tel, msg), target:'_blank', rel:'noopener', text:'WhatsApp\'ta gönder'}) : null;
+      var aramaAdimi = adim === 'ara' || adim === 'ara2';
+      var wa = (x.tel && msg && !aramaAdimi) ? h('a', {cls:'btn pri', href:waLink(x.tel, msg), target:'_blank', rel:'noopener', text:'WhatsApp\'ta gönder'}) : null;
+      var araBtn = (x.tel && aramaAdimi) ? h('a', {cls:'btn ara', href:'tel:+90' + digits(x.tel), text:'ARA'}) : null;
+      if (araBtn) araBtn.addEventListener('click', function(){ setTimeout(function(){ kaydetAc(ref, [mah(x.mahalle), x.oda].join(' ') || x.baslik, x.tel, x.ad, adim); }, 900); });
+      var waSohbet = (x.tel && aramaAdimi) ? h('a', {cls:'btn', href:waLink(x.tel), target:'_blank', rel:'noopener', text:'WhatsApp'}) : null;
       var slot = h('div');
-      if (wa) wa.addEventListener('click', function(){ rpc('reos_kaydet', {p:{ref:ref, summary:'WhatsApp\'tan takip mesajı (' + (ADIM[adim] || [adim])[0] + ')', channel:'whatsapp', tur:'ikinci_mesaj'}}).then(function(){ slot.replaceChildren(geriAlKutusu(ref)); }); });
-      var ata = ROL === 'ozkan' ? h('button', {text:x.kim === 'Sevilay' ? 'Bana al' : 'Sevilay\'a ver', onclick:function(ev){ ev.target.disabled = true;
-        rpc('reos_ata', {p_id:x.id, p_kime:x.kim === 'Sevilay' ? 'Özkan' : 'Sevilay'}).then(takip); }}) : null;
-      kids.push(h('div', {cls:'acts'}, [wa, telLinks(x.tel), link(x.url), noKopya(x.no), cp,
-        h('button', {cls:wa ? '' : 'pri', text:'Sonuç yaz', onclick:function(){ kaydetAc(ref, [mah(x.mahalle), x.oda].join(' ') || x.baslik, x.tel, x.ad, x.cevap ? '' : (adim === 'ara' ? 'ara' : '')); }}),
-        adim === 'birak' && !x.cevap ? kayitBtn('Beklemeye al', ref, {summary:'3 denemede cevap yok, beklemeye alındı', tur:'birak'}, takip) : null, ata]));
+      if (wa) wa.addEventListener('click', function(){ rpc('reos_kaydet', {p:{ref:ref, summary:'WhatsApp\'tan takip mesajı (' + (ADIM[adim] || [adim])[0] + ')', channel:'whatsapp', tur:adim === 'ulasamadim' ? 'ulasamadim_mesaj' : 'ikinci_mesaj'}}).then(function(){ slot.replaceChildren(geriAlKutusu(ref)); }); });
+      var ata = null;
+      if (ROL === 'ozkan' && EKIP.length) { ata = h('select', {'aria-label':'İşi ver', style:'width:auto'}, [h('option', {value:'', text:'İşi ver: ' + x.kim})].concat(EKIP.filter(function(e){ return e.ad !== x.kim; }).map(function(e){ return h('option', {value:e.ad, text:e.ad === 'Özkan' ? 'Bana al' : yonelme(e.ad) + ' ver'}); })));
+        ata.addEventListener('change', function(){ if (!ata.value) return; ata.disabled = true; rpc('reos_ata', {p_id:x.id, p_kime:ata.value}).then(takip); }); }
+      kids.push(h('div', {cls:'acts'}, [araBtn, waSohbet, wa, araBtn || wa ? null : telLinks(x.tel), link(x.url), noKopya(x.no), cp,
+        h('button', {cls:(wa || araBtn) ? '' : 'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(ref, [mah(x.mahalle), x.oda].join(' ') || x.baslik, x.tel, x.ad, x.cevap ? '' : (aramaAdimi ? adim : '')); }}),
+        adim === 'birak' && !x.cevap ? kayitBtn('30 gün beklemeye al', ref, {summary:'5 denemede ulaşılamadı, 30 gün beklemede', tur:'birak'}, takip) : null, ata]));
       if (!x.tel) kids.push(telEkle(ref, function(){ takip(); }));
       kids.push(slot); kids.push(nedenPanel(x.fid));
       out.push(h('div', {cls:'card' + (x.cevap ? ' hot' : '')}, kids));
     });
-    view.replaceChildren.apply(view, out);
+    view.replaceChildren.apply(view, out.filter(Boolean));
   }).catch(fail);
 }
 
@@ -723,9 +749,10 @@ function cikis(){ sb.auth.signOut().then(function(){ ROL = null; girisEkrani('Ç
 var R = {bugun:bugun, ilan:ilan, ara:ara, huni:huni, kisi:kisi, sevilay:sevilay, takip:takip, protest:protest};
 function route(){
   if (!ROL) return;
-  var def = ROL === 'sevilay' ? 'sevilay' : 'bugun';
+  var def = uyeMi() ? 'sevilay' : 'bugun';
+  document.getElementById('menu').hidden = true;
   var k = (location.hash || '#' + def).slice(1);
-  if (!R[k] || (ROL === 'sevilay' && k !== 'sevilay' && k !== 'takip')) k = def;
+  if (!R[k] || (uyeMi() && ['sevilay','takip','kilavuz'].indexOf(k) < 0)) k = def;
   [].forEach.call(document.querySelectorAll('nav a'), function(a){
     a.hidden = (a.getAttribute('data-r') || '').split(' ').indexOf(ROL) < 0;
     if (a.getAttribute('href') === '#' + k) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
@@ -734,13 +761,32 @@ function route(){
 function basla(){
   rpc('reos_ben').then(function(b){
     if (!b || !b.rol) { view.replaceChildren(h('div', {cls:'msg err', text:(b && b.email ? b.email : 'Bu hesap') + ' hesabı henüz onaylanmadı. Özkan Claude\'a "onayla" desin, sonra sayfayı yenile.'}), h('div', {cls:'acts'}, [h('button', {text:'Çıkış', onclick:cikis})])); return; }
-    ROL = b.rol;
+    ROL = b.rol2 || b.rol; if (ROL === 'sevilay') ROL = 'uye';
+    AD = b.ad || ''; OFIS = b.ofis || ''; EKIP = b.ekip || [];
+    var ks = document.getElementById('k_kim');
+    ks.replaceChildren.apply(ks, (EKIP.length ? EKIP.map(function(e){ return e.ad; }) : [AD || 'Özkan']).map(function(a){ return h('option', {value:a, text:a}); }));
     document.getElementById('nav').hidden = false;
+    menuKur();
     var hd = document.getElementById('fresh');
     hd.replaceChildren(document.createTextNode((b.ad || b.email) + ' · s' + SURUM.slice(5) + ' · '), h('a', {href:'#', style:'color:inherit', text:'çıkış', onclick:function(e){ e.preventDefault(); cikis(); }}));
     route();
   }).catch(function(e){ girisEkrani(e.message); });
 }
+function menuKur(){
+  var m = document.getElementById('menu'), b = document.getElementById('menuBtn');
+  var items = [ROL === 'ozkan' ? ['#kisi', 'Kişi ara'] : null, ROL === 'ozkan' ? ['#huni', 'Portföy hunisi'] : null,
+    ROL === 'ozkan' ? ['#protest', 'sahibinden Pro testi'] : null, ['#kilavuz', 'Kullanım kılavuzu']].filter(Boolean);
+  m.replaceChildren.apply(m, items.map(function(x){ return h('a', {href:x[0], text:x[1]}); }).concat([
+    h('a', {href:'#', text:'Sayfayı yenile', onclick:function(e){ e.preventDefault(); location.reload(); }}),
+    h('a', {href:'#', text:'Çıkış', onclick:function(e){ e.preventDefault(); m.hidden = true; cikis(); }})]));
+  b.hidden = false;
+  b.onclick = function(){ m.hidden = !m.hidden; b.setAttribute('aria-expanded', String(!m.hidden)); };
+  document.addEventListener('click', function(e){ if (!m.hidden && !m.contains(e.target) && e.target !== b) m.hidden = true; });
+}
+function kilavuz(){
+  view.replaceChildren(sec('Kullanım kılavuzu'), h('div', {cls:'msg', text:'Kılavuz hazırlanıyor.'}));
+}
+R.kilavuz = kilavuz;
 window.addEventListener('hashchange', route);
 sb.auth.getSession().then(function(r){ if (r.data && r.data.session) basla(); else girisEkrani(); });
 sb.auth.onAuthStateChange(function(ev, ses){ if (ev === 'SIGNED_IN' && ses && !ROL) basla(); });
