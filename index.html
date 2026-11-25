@@ -226,7 +226,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.25g';
+var SURUM = '2026.11.25h';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -700,16 +700,16 @@ var takipFiltre = {kim:'', durum:'bugun'};
 function ozetIstedi(ref, btn, slot){
   btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
   rpc('reos_ozet_istedi', {p_ref:ref}).then(function(r){
-    if (!r.ok) { btn.disabled = false; btn.textContent = 'Özet istedi'; slot.replaceChildren(h('div', {cls:'msg err', text:r.neden || 'Hazırlanamadı'})); return; }
-    btn.textContent = 'Özet hazır';
+    if (!r.ok) { btn.disabled = false; btn.textContent = 'Ön RPA gönder'; slot.replaceChildren(h('div', {cls:'msg err', text:r.neden || 'Hazırlanamadı'})); return; }
+    btn.textContent = 'Ön RPA hazır';
     var cp = h('button', {text:'Özeti kopyala'}); cp.addEventListener('click', function(){ kopyala(r.metin, cp); });
     var wa = r.tel ? h('a', {cls:'btn pri', href:waLink(r.tel, r.metin), target:'_blank', rel:'noopener', text:'WhatsApp\'ta gönder'}) : null;
     slot.replaceChildren(h('div', {cls:'card hot'}, [
-      h('div', {cls:'t', text:'Mal sahibine kısa özet (fiyat ve değer yok)'}),
+      h('div', {cls:'t', text:'Ön RPA: mal sahibine kısa özet (fiyat ve değer yok)'}),
       h('div', {cls:'msgbox', text:r.metin}),
       h('div', {cls:'acts'}, [wa, cp]),
       h('div', {cls:'m', text:'Fiyat, değer ya da satış tablosu yazılı verilmez; onları Özkan yüz yüze gösterir. ' + (uyeMi() ? 'İş Özkan\'ın ekranına düştü: bugün arayacak.' : 'Bugün ara, 15 dakikalık randevu al.')})]));
-  }).catch(function(e){ btn.disabled = false; btn.textContent = 'Özet istedi'; slot.replaceChildren(h('div', {cls:'msg err', text:e.message})); });
+  }).catch(function(e){ btn.disabled = false; btn.textContent = 'Ön RPA gönder'; slot.replaceChildren(h('div', {cls:'msg err', text:e.message})); });
 }
 function takipAdim(x){
   if (x.ilan_kalkti) return 'ilan_kalkti';
@@ -760,9 +760,9 @@ function takip(){
       kids.push(h('div', {cls:'acts'}, [araBtn, waSohbet, wa, araBtn || wa ? null : telLinks(x.tel), link(x.url), noKopya(x.no), cp,
         h('button', {cls:(wa || araBtn) ? '' : 'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(ref, [mah(x.mahalle), x.oda].join(' ') || x.baslik, x.tel, x.ad, x.cevap ? '' : (aramaAdimi ? adim : '')); }}),
         adim === 'birak' && !x.cevap ? kayitBtn('30 gün beklemeye al', ref, {summary:'5 denemede ulaşılamadı, 30 gün beklemede', tur:'birak'}, takip) : null, ata]));
-      var ozBtn = h('button', {text:'Özet istedi'});
+      var ozBtn = h('button', {text:'Ön RPA gönder'});
       ozBtn.addEventListener('click', function(){ ozetIstedi(ref, ozBtn, slot); });
-      kids.push(h('div', {cls:'acts'}, [ozBtn, h('span', {cls:'m', text:'Sahip "bilgi / özet gönderin" dediyse bas: rakamsız kısa özet hazırlanır, iş Özkan\'a düşer.'})]));
+      kids.push(h('div', {cls:'acts'}, [ozBtn, h('span', {cls:'m', text:'Sahip "bilgi / özet gönderin" dediyse: rakamsız Ön RPA hazırlanır, iş Özkan\'a düşer.'})]));
       if (!x.tel) kids.push(telEkle(ref, function(){ takip(); }));
       kids.push(slot); kids.push(nedenPanel(x.fid));
       out.push(h('div', {cls:'card' + (x.cevap ? ' hot' : '')}, kids));
@@ -857,7 +857,7 @@ var KILAVUZ_UYE = [
   ['Yeni bir ilan sahibine ilk temas', ['Saat 10:00 ile 19:00 arasıysa büyük yeşil ARA düğmesine bas.', 'Açarsa: kendini tanıt, ilanı sor, ilgileniyorsa "Özkan Bey sizi kısaca arasın, hangi saat uygun?" de.', 'Açmazsa ya da saat uygun değilse "WhatsApp\'ta gönder"e bas. Mesaj hazır gelir, sen sadece gönder\'e basarsın.', 'Telefon kapanınca açılan kutuda ne olduğunu seç (Cevap yok, Ulaşılamadı, Olumlu…), bir cümle ekle, Kaydet.']],
   ['Altın kural', ['Cevap vermeyen birine ikinci mesaj ATMA. Sıradaki adım her zaman ARAMAK.', 'Sıra: Mesaj → ertesi gün ARA → 2 gün sonra başka saatte ARA → "aradım, ulaşamadım" mesajı → ARA → 30 gün bekle.', 'Uygulama sana her ilan için sıradaki adımı zaten gösterir. Kartta ne yazıyorsa onu yap.']],
   ['Sahibi olumlu döndüyse', ['Sonucu "Olumlu" ya da "Randevu" diye kaydet. İş kendiliğinden Özkan\'a geçer, o arar.', 'Fiyat, yetki, komisyon konuşma. "Özkan Bey size detaylı bilgi verecek" de.']],
-  ['Sahip "bilgi / özet gönderin" derse', ['Takip\'te o ilanın kartında "Özet istedi"ye bas. Rakamsız kısa özet hazırlanır; "WhatsApp\'ta gönder"e basman yeter.', 'Fiyat, değer ya da "kaça satılır" yazma. Özette Özkan Bey\'le 15 dakikalık görüşme daveti var; iş kendiliğinden Özkan\'a geçer, o arar.']],
+  ['Sahip "bilgi / özet gönderin" derse', ['Takip\'te o ilanın kartında "Ön RPA gönder"e bas. Rakamsız kısa özet hazırlanır; "WhatsApp\'ta gönder"e basman yeter.', 'Fiyat, değer ya da "kaça satılır" yazma. Özette Özkan Bey\'le 15 dakikalık görüşme daveti var; iş kendiliğinden Özkan\'a geçer, o arar.']],
   ['Telefon numarası yoksa', ['İlanı aç, numarayı kopyala, karttaki kutuya yapıştır, "Telefonu ekle"ye bas. ARA ve WhatsApp düğmeleri çıkar.', 'Numara hiç yoksa mesajı sahibinden\'den gönder ve "Sahibinden\'den gönderdim"e bas.']],
   ['Yanlışlıkla bastıysan', ['WhatsApp gönderiminden sonra 15 dakika "Geri al" düğmesi görünür. Ona bas.']],
   ['Not yazmak yerine konuş', ['Sonuç kutusunda klavyedeki mikrofon simgesine bas ve söyle. Örn: "Aradım, kiracı var, 2 hafta sonra tekrar ara." Sistem "2 hafta sonra"yı anlar ve tarihi kendisi koyar.']],
