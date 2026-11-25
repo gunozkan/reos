@@ -226,7 +226,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.25e';
+var SURUM = '2026.11.25f';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -697,6 +697,20 @@ function sevilay(){
 
 /* ---------- Takip (ortak) ---------- */
 var takipFiltre = {kim:'', durum:'bugun'};
+function ozetIstedi(ref, btn, slot){
+  btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
+  rpc('reos_ozet_istedi', {p_ref:ref}).then(function(r){
+    if (!r.ok) { btn.disabled = false; btn.textContent = 'Özet istedi'; slot.replaceChildren(h('div', {cls:'msg err', text:r.neden || 'Hazırlanamadı'})); return; }
+    btn.textContent = 'Özet hazır';
+    var cp = h('button', {text:'Özeti kopyala'}); cp.addEventListener('click', function(){ kopyala(r.metin, cp); });
+    var wa = r.tel ? h('a', {cls:'btn pri', href:waLink(r.tel, r.metin), target:'_blank', rel:'noopener', text:'WhatsApp\'ta gönder'}) : null;
+    slot.replaceChildren(h('div', {cls:'card hot'}, [
+      h('div', {cls:'t', text:'Mal sahibine kısa özet (fiyat ve değer yok)'}),
+      h('div', {cls:'msgbox', text:r.metin}),
+      h('div', {cls:'acts'}, [wa, cp]),
+      h('div', {cls:'m', text:'Fiyat, değer ya da satış tablosu yazılı verilmez; onları Özkan yüz yüze gösterir. ' + (uyeMi() ? 'İş Özkan\'ın ekranına düştü: bugün arayacak.' : 'Bugün ara, 15 dakikalık randevu al.')})]));
+  }).catch(function(e){ btn.disabled = false; btn.textContent = 'Özet istedi'; slot.replaceChildren(h('div', {cls:'msg err', text:e.message})); });
+}
 function takipAdim(x){
   if (x.ilan_kalkti) return 'ilan_kalkti';
   if (x.eski_fiyat) return 'fiyat_dustu';
@@ -746,6 +760,9 @@ function takip(){
       kids.push(h('div', {cls:'acts'}, [araBtn, waSohbet, wa, araBtn || wa ? null : telLinks(x.tel), link(x.url), noKopya(x.no), cp,
         h('button', {cls:(wa || araBtn) ? '' : 'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(ref, [mah(x.mahalle), x.oda].join(' ') || x.baslik, x.tel, x.ad, x.cevap ? '' : (aramaAdimi ? adim : '')); }}),
         adim === 'birak' && !x.cevap ? kayitBtn('30 gün beklemeye al', ref, {summary:'5 denemede ulaşılamadı, 30 gün beklemede', tur:'birak'}, takip) : null, ata]));
+      var ozBtn = h('button', {text:'Özet istedi'});
+      ozBtn.addEventListener('click', function(){ ozetIstedi(ref, ozBtn, slot); });
+      kids.push(h('div', {cls:'acts'}, [ozBtn, h('span', {cls:'m', text:'Sahip "bilgi / özet gönderin" dediyse bas: rakamsız kısa özet hazırlanır, iş Özkan\'a düşer.'})]));
       if (!x.tel) kids.push(telEkle(ref, function(){ takip(); }));
       kids.push(slot); kids.push(nedenPanel(x.fid));
       out.push(h('div', {cls:'card' + (x.cevap ? ' hot' : '')}, kids));
