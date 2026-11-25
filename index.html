@@ -226,7 +226,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.25f';
+var SURUM = '2026.11.25g';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -857,6 +857,7 @@ var KILAVUZ_UYE = [
   ['Yeni bir ilan sahibine ilk temas', ['Saat 10:00 ile 19:00 arasıysa büyük yeşil ARA düğmesine bas.', 'Açarsa: kendini tanıt, ilanı sor, ilgileniyorsa "Özkan Bey sizi kısaca arasın, hangi saat uygun?" de.', 'Açmazsa ya da saat uygun değilse "WhatsApp\'ta gönder"e bas. Mesaj hazır gelir, sen sadece gönder\'e basarsın.', 'Telefon kapanınca açılan kutuda ne olduğunu seç (Cevap yok, Ulaşılamadı, Olumlu…), bir cümle ekle, Kaydet.']],
   ['Altın kural', ['Cevap vermeyen birine ikinci mesaj ATMA. Sıradaki adım her zaman ARAMAK.', 'Sıra: Mesaj → ertesi gün ARA → 2 gün sonra başka saatte ARA → "aradım, ulaşamadım" mesajı → ARA → 30 gün bekle.', 'Uygulama sana her ilan için sıradaki adımı zaten gösterir. Kartta ne yazıyorsa onu yap.']],
   ['Sahibi olumlu döndüyse', ['Sonucu "Olumlu" ya da "Randevu" diye kaydet. İş kendiliğinden Özkan\'a geçer, o arar.', 'Fiyat, yetki, komisyon konuşma. "Özkan Bey size detaylı bilgi verecek" de.']],
+  ['Sahip "bilgi / özet gönderin" derse', ['Takip\'te o ilanın kartında "Özet istedi"ye bas. Rakamsız kısa özet hazırlanır; "WhatsApp\'ta gönder"e basman yeter.', 'Fiyat, değer ya da "kaça satılır" yazma. Özette Özkan Bey\'le 15 dakikalık görüşme daveti var; iş kendiliğinden Özkan\'a geçer, o arar.']],
   ['Telefon numarası yoksa', ['İlanı aç, numarayı kopyala, karttaki kutuya yapıştır, "Telefonu ekle"ye bas. ARA ve WhatsApp düğmeleri çıkar.', 'Numara hiç yoksa mesajı sahibinden\'den gönder ve "Sahibinden\'den gönderdim"e bas.']],
   ['Yanlışlıkla bastıysan', ['WhatsApp gönderiminden sonra 15 dakika "Geri al" düğmesi görünür. Ona bas.']],
   ['Not yazmak yerine konuş', ['Sonuç kutusunda klavyedeki mikrofon simgesine bas ve söyle. Örn: "Aradım, kiracı var, 2 hafta sonra tekrar ara." Sistem "2 hafta sonra"yı anlar ve tarihi kendisi koyar.']],
