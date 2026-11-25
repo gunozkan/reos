@@ -226,7 +226,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.25d';
+var SURUM = '2026.11.25e';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -541,13 +541,27 @@ function huni(){
 
 /* ---------- Kişi ---------- */
 function kisi(){
-  var inp = h('input', {id:'q_kisi', placeholder:'Ad parçası ya da telefon'});
-  var res = h('div', {style:'display:grid;gap:10px'});
-  view.replaceChildren(h('form', {cls:'q', onsubmit:function(e){ e.preventDefault(); run(); }}, [
-    h('label', {'for':'q_kisi'}, ['Kişi: en son ne konuştuk?', inp]), h('div', {cls:'acts'}, [h('button', {cls:'pri', type:'submit', text:'Getir'})])]), res);
+  var inp = h('input', {id:'q_kisi', type:'search', autocomplete:'off', placeholder:'Ad, adın bir parçası ya da numaranın bir parçası'});
+  var liste = h('div', {style:'display:grid;gap:6px'}), res = h('div', {style:'display:grid;gap:10px'}), zam = null, son = '';
+  view.replaceChildren(sec('Kişi ara', null, 'Yazdıkça sonuç gelir. Türkçe harf fark etmez (sevval = Şevval). Numaranın herhangi bir parçası da olur (532 210). Önce CRM kişileri, sonra telefon rehberin. Kişiye dokun: en son ne konuştuğunuz açılır.'),
+    h('form', {cls:'q', onsubmit:function(e){ e.preventDefault(); ara(); }}, [h('label', {'for':'q_kisi'}, ['Kim?', inp])]), liste, res);
   inp.focus();
-  function run(){
-    var q = inp.value.trim(); if (q.length < 3) return;
+  inp.addEventListener('input', function(){ clearTimeout(zam); zam = setTimeout(ara, 250); });
+  function ara(){
+    var q = inp.value.trim(); if (q === son) return; son = q; res.replaceChildren();
+    if (q.replace(/\s/g, '').length < 2) { liste.replaceChildren(); return; }
+    rpc('reos_kisi_ara', {p_q:q}).then(function(rows){
+      if (inp.value.trim() !== q) return;
+      if (!rows.length) { liste.replaceChildren(empty('Eşleşen kişi yok.')); return; }
+      liste.replaceChildren.apply(liste, rows.map(function(k){
+        return h('button', {type:'button', style:'justify-content:space-between;text-align:left;width:100%;padding:10px 12px', onclick:function(){ liste.replaceChildren(); run(k.anahtar, k.ad); }}, [
+          h('span', {style:'display:grid;gap:2px;min-width:0'}, [h('span', {text:k.ad || '?'}), k.etiket ? h('span', {cls:'m', text:k.etiket}) : null]),
+          h('span', {cls:'m', style:'white-space:nowrap', text:(k.tel || '') + (k.kaynak === 'rehber' ? ' · rehber' : '')})]); }));
+    }).catch(function(e){ liste.replaceChildren(h('div', {cls:'msg err', text:e.message})); });
+  }
+  function run(qq, ad){
+    var q = (qq || inp.value).trim(); if (q.length < 3) return;
+    if (ad) inp.value = ad;
     res.replaceChildren(h('div', {cls:'spin', text:'Kişi özeti getiriliyor…'}));
     rpc('reos_kisi', {p_q:q}).then(function(d){
       var kids = [];
