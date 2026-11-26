@@ -234,7 +234,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.26d';
+var SURUM = '2026.11.26e';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -677,7 +677,7 @@ function yeniKart(x, i){
     if (araBtn) araBtn.addEventListener('click', function(){ setTimeout(function(){ kaydetAc(ref, [mah(x.mahalle), x.oda, tl(x.fiyat)].join(' '), x.tel, '', 'ara'); }, 900); });
     var slot = h('div');
     if (wa) wa.addEventListener('click', function(){ rpc('reos_kaydet', {p:{ref:ref, summary:'WhatsApp\'tan ilk mesaj gönderildi', channel:'whatsapp', tur:'ilk_mesaj'}})
-      .then(function(){ card.classList.remove('fsbo'); slot.replaceChildren(h('div', {cls:'msg', text:'Gönderildi. Bu ilan artık Takip sekmesinde; sahip cevap verirse orada "cevap verdi" etiketiyle görünür.'}), geriAlKutusu(ref, function(){ card.classList.add('fsbo'); })); }); });
+      .then(function(){ card.classList.remove('fsbo'); var gb = card.querySelector('[data-gonderdim]'); if (gb) gb.remove(); slot.replaceChildren(h('div', {cls:'msg', text:'Gönderildi. Bu ilan artık Takip sekmesinde; sahip cevap verirse orada "cevap verdi" etiketiyle görünür.'}), geriAlKutusu(ref, function(){ card.classList.add('fsbo'); })); }); });
     card.replaceChildren.apply(card, [
       h('div', {cls:'row'}, [chip(String(i + 1)), chip(x.tur || 'Satılık'), x.gun != null ? chip(x.gun + ' gündür yayında') : null,
         x.eski_fiyat ? chip('fiyatı düştü', 'warn') : null, x.emlakci_istemez ? chip('emlakçı istemiyor: kibar bilgi teklifi', 'warn') : null, x.derece ? chip('satıcı ' + x.derece) : null]),
@@ -688,7 +688,7 @@ function yeniKart(x, i){
       x.tel ? null : telEkle(ref, function(t){ x.tel = t; ciz(); }),
       araSaati ? h('div', {cls:'m', text:'Saat 10:00–19:00 arası: önce ARA. Açmazsa WhatsApp mesajını gönder.'}) : null,
       h('div', {cls:'acts'}, [araBtn, wa, link(x.url), noKopya(x.no), cp,
-        kayitBtn(x.tel ? 'Başka yoldan gönderdim' : 'Sahibinden\'den gönderdim', ref, {summary:'İlk mesaj gönderildi (' + (x.tel ? 'diğer' : 'sahibinden') + ')', channel:x.tel ? 'mesaj' : 'sahibinden', tur:'ilk_mesaj'}, function(){ card.classList.remove('fsbo'); }),
+        (function(b){ b.setAttribute('data-gonderdim', '1'); return b; })(kayitBtn(x.tel ? 'Başka yoldan gönderdim' : 'Sahibinden\'den gönderdim', ref, {summary:'İlk mesaj gönderildi (' + (x.tel ? 'diğer' : 'sahibinden') + ')', channel:x.tel ? 'mesaj' : 'sahibinden', tur:'ilk_mesaj'}, function(){ card.classList.remove('fsbo'); })),
         h('button', {text:'Cevap geldi', onclick:function(){ kaydetAc(ref, [mah(x.mahalle), x.oda, tl(x.fiyat)].join(' '), x.tel, '', 'cevap'); }}),
         kayitBtn('İlan yayında değil', ref, {summary:'İlan açıldı, yayında değil (Fizbot verisi bir gün geriden geliyor)', channel:'kontrol', stage:'Beklemede', next_date:gunSonra(14), next_step:'İlan kalkmıştı: telefon varsa ARA, sattı mı / ara mı verdi sor'}, function(){ card.classList.remove('fsbo'); card.classList.add('kalkti'); })]),
       h('div', {cls:'m', text:'Liste Fizbot\'tan bir gün gecikmeli gelir. Link "ilan yok" diyorsa "İlan yayında değil"e bas: listeden düşer, kişi bilgisi saklanır, 14 gün sonra Takip\'e döner.'}),
@@ -927,19 +927,23 @@ function pano(){
     });
 
     /* akış */
-    var ak = (d.akis || []).filter(function(a){ return panoFiltre.kim === 'hepsi' || a.kim === panoFiltre.kim; });
+    var ak0 = (d.akis || []).filter(function(a){ return panoFiltre.kim === 'hepsi' || a.kim === panoFiltre.kim; });
+    /* aynı ilana ait temaslar tek satırda: en yenisi üstte, öncekiler altında */
+    var ak = [], grup = {};
+    ak0.forEach(function(a){ if (a.id && grup[a.id]) { grup[a.id].onceki.push(a); return; } a.onceki = []; if (a.id) grup[a.id] = a; ak.push(a); });
     var kimSel = h('select', {style:'width:auto'}, [h('option', {value:'hepsi', text:'Herkes'})].concat(ekip.map(function(e){ return h('option', {value:e.ad, text:e.ad}); })));
     kimSel.value = panoFiltre.kim; kimSel.addEventListener('change', function(){ panoFiltre.kim = kimSel.value; pano(); });
-    out.push(sec('Kime ne yazıldı, kim aradı', ak.length, 'Seçilen dönemdeki her temas, en yenisi üstte. Satıra bas: o ilanın tüm geçmişi ve Claude önerisi açılır.'));
+    out.push(sec('Kime ne yazıldı, kim aradı', ak.length, 'Seçilen dönemde temas edilen ilanlar, en son temas üstte. Aynı ilana birden çok temas varsa tek satırda toplanır. Geçmiş\'e bas: o ilanın tüm notları ve Claude önerisi açılır.'));
     out.push(h('div', {cls:'row'}, [h('span', {cls:'m', text:'Kişi'}), kimSel]));
     if (!ak.length) out.push(empty('Bu dönemde kayıtlı temas yok.'));
     var liste = h('div', {cls:'card', style:'gap:0;padding:4px 12px'});
     ak.forEach(function(a, i){
       liste.appendChild(h('div', {style:'padding:8px 0;' + (i ? 'border-top:1px solid var(--line)' : '')}, [
         h('div', {cls:'row'}, [h('span', {cls:'m', text:a.t}), chip(a.kim), chip(KANAL[a.kanal] || a.kanal, a.kanal === 'arama' ? 'good' : null), noChip(a.no),
-          a.sahip && a.sahip !== a.kim ? chip('şimdi ' + a.sahip) : null]),
+          a.sahip && a.sahip !== a.kim ? chip('şimdi ' + a.sahip) : null, a.onceki.length ? chip((a.onceki.length + 1) + ' temas', 'warn') : null]),
         h('div', {cls:'t', style:'font-size:14px', text:a.baslik || ''}),
         h('div', {cls:'m', text:a.not || ''}),
+        a.onceki.length ? h('div', {cls:'m', style:'opacity:.8', text:'Önceki: ' + a.onceki.map(function(o){ return o.t + ' ' + (KANAL[o.kanal] || o.kanal) + ' · ' + (o.not || ''); }).join(' | ')}) : null,
         a.id ? h('div', {cls:'acts'}, [link(a.url), noKopya(a.no), ataSec(a.id, a.sahip, a.no, a.baslik)]) : null,
         a.id ? gecmisPanel(a.id, 'Geçmiş') : null]));
     });
