@@ -205,11 +205,18 @@ function fiyatSatiri(f, sl){
     ek.length ? h('div', {cls:'m', style:'color:var(--warn)', text:'Eksik bilgi: ' + eksikMetin(ek)}) : null);
 }
 function fiyatYukle(slots, byFid){
-  var keys = Object.keys(slots); if (!keys.length) return;
-  rpc(byFid ? 'reos_fiyatlar_fid' : 'reos_fiyatlar', byFid ? {p_fids:keys} : {p_ids:keys}).then(function(fm){
-    keys.forEach(function(k){ var f = (fm || {})[k]; if (f) fiyatSatiri(f, slots[k]); else slots[k].replaceChildren(); });
-  }).catch(function(){ keys.forEach(function(k){ slots[k].replaceChildren(); }); });
+  /* byFid: true = Fizbot id, 'ref' = ilan linki / ilan no / Fizbot id, yoksa huni (pipeline) id; bir anahtara birden çok yer bağlanabilir */
+  var all = Object.keys(slots); if (!all.length) return;
+  function yerler(k){ return [].concat(slots[k]); }
+  for (var i = 0; i < all.length; i += 50) (function(keys){
+    var fn = byFid === 'ref' ? 'reos_fiyatlar_ref' : (byFid ? 'reos_fiyatlar_fid' : 'reos_fiyatlar');
+    var arg = byFid === 'ref' ? {p_refs:keys} : (byFid ? {p_fids:keys} : {p_ids:keys});
+    rpc(fn, arg).then(function(fm){
+      keys.forEach(function(k){ var f = (fm || {})[k]; yerler(k).forEach(function(sl){ if (f) fiyatSatiri(f, sl); else sl.replaceChildren(); }); });
+    }).catch(function(){ keys.forEach(function(k){ yerler(k).forEach(function(sl){ sl.replaceChildren(); }); }); });
+  })(all.slice(i, i + 50));
 }
+function fiyatBagla(slots, k){ if (!k) return null; var sl = fiyatYeri(); slots[k] = (slots[k] || []).concat([sl]); return sl; }
 function fiyatYeri(){ return h('div', null, [h('span', {cls:'m', text:'Fiyat ve önerilen fiyat hesaplanıyor…'})]); }
 var EKSIK_AD = {kullanim:'kullanım (boş/sahibi/kiracılı)', yas:'bina yaşı', kat:'kat', tapu:'tapu'};
 function eksikMetin(e){ return (e || []).map(function(k){ return (EKSIK_AD[k] || k).split(' (')[0]; }).join(' · '); }
@@ -292,7 +299,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.26i';
+var SURUM = '2026.11.26j';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -379,7 +386,7 @@ function bugun(){
   loading('Bugünün listesi hazırlanıyor…');
   rpc('reos_bugun').then(function(d){
     view.dataset.t = 1;
-    var hn = d.huni || {};
+    var hn = d.huni || {}, bPid = {}, bRef = {};
     var out = [h('div', {cls:'m', text:'Güncellendi ' + d.simdi + ' · Fizbot ' + (d.tazelik.fizbot || '?') + ' · aktif ilan ' + (d.tazelik.aktif || '?')}), h('div', {cls:'stat'}, ['Aday','Temas','Görüşme','Yetki'].map(function(s){
       return h('div', null, [h('b', {text:String(hn[s] || 0)}), h('span', {text:s})]); }))];
 
@@ -397,7 +404,7 @@ function bugun(){
       d.devral.forEach(function(p){ out.push(h('div', {cls:'card hot'}, [
         h('div', {cls:'row'}, [chip(p.id), chip('cevap ' + (p.cevap || ''), 'warn')]),
         h('div', {cls:'t', text:(p.ad ? p.ad + ' · ' : '') + (p.baslik || '')}),
-        p.fiyat ? h('div', {cls:'price', text:tl(p.fiyat)}) : null,
+        fiyatBagla(bPid, p.id) || (p.fiyat ? h('div', {cls:'price', text:tl(p.fiyat)}) : null),
         p.not ? h('div', {cls:'m', text:p.not}) : null,
         h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])])); });
     }
@@ -407,6 +414,7 @@ function bugun(){
       out.push(h('div', {cls:'card hot'}, [
         h('div', {cls:'row'}, [chip(p.id), chip(p.asama), p.gecikme > 0 ? chip(p.gecikme + ' gün gecikti', 'bad') : chip('bugün', 'warn')]),
         h('div', {cls:'t', text:(p.ad ? p.ad + ' · ' : '') + (p.baslik || '')}),
+        fiyatBagla(bPid, p.id),
         p.adim ? h('div', {cls:'m', text:'Yapılacak: ' + p.adim}) : null,
         h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])]));
     });
@@ -437,8 +445,9 @@ function bugun(){
           var gorulen = {};
           box.appendChild(h('div', {cls:'card' + (r[6] === 'FSBO' ? ' fsbo' : '')}, [
             h('div', {cls:'row'}, [r[6] ? chip('FSBO', 'good') : null, no ? chip('İlan no ' + no) : null,
-              r[4] ? chip(tl(r[4]) + ' → ' + tl(r[5]), 'warn') : (r[5] && !isNaN(+r[5]) ? h('span', {cls:'price', text:tl(r[5])}) : null)]),
+              r[4] ? chip(tl(r[4]) + ' → ' + tl(r[5]), 'warn') : (r[5] && !r[12] && !isNaN(+r[5]) ? h('span', {cls:'price', text:tl(r[5])}) : null)]),
             h('div', {cls:'t', text:r[3] || ''}),
+            fiyatBagla(bRef, r[12]),
             r[13] ? h('div', {cls:'m', text:r[13]}) : null,
             h('div', {cls:'m', text:'Uyan alıcılar (uyum 100 = ilçe 25 + site/mahalle 25 + oda 20 + bütçe 30):'})].concat(
             rs.filter(function(x){ if (!x[7] || gorulen[x[7]]) return false; gorulen[x[7]] = 1; return true; }).map(function(x){
@@ -453,8 +462,9 @@ function bugun(){
         // [tarih, tür, kayıt, mülk, eski, fiyat, fsbo, kişi, tel, talep, puan, neden, link, not]
         box.appendChild(h('div', {cls:'card' + (r[6] === 'FSBO' ? ' fsbo' : '')}, [
           h('div', {cls:'row'}, [r[6] ? chip('FSBO', 'good') : null, r[10] != null ? chip('puan ' + r[10]) : null,
-            r[4] ? chip(tl(r[4]) + ' → ' + tl(r[5]), 'warn') : (r[5] && !isNaN(+r[5]) ? h('span', {cls:'price', text:tl(r[5])}) : null)]),
+            r[4] ? chip(tl(r[4]) + ' → ' + tl(r[5]), 'warn') : (r[5] && !r[12] && !isNaN(+r[5]) ? h('span', {cls:'price', text:tl(r[5])}) : null)]),
           h('div', {cls:'t', text:r[3] || ''}),
+          fiyatBagla(bRef, r[12]),
           r[7] ? h('div', {cls:'m', text:'Kişi: ' + r[7] + (r[9] ? ' (' + r[9] + ')' : '')}) : null,
           r[11] ? h('div', {cls:'m', text:r[11]}) : null,
           r[13] ? h('div', {cls:'m', text:r[13]}) : null,
@@ -465,6 +475,7 @@ function bugun(){
       det.appendChild(box); out.push(det);
     });
     view.replaceChildren.apply(view, out);
+    fiyatYukle(bPid, false); fiyatYukle(bRef, 'ref');
   }).catch(fail);
 }
 
@@ -573,15 +584,15 @@ function ara(){
     lastAra = {tur:tur.value, ilce:ilce.value, oda:oda.value, kelime:kelime.value, minT:min.value, maxT:max.value, fsboV:fsbo.value};
     res.replaceChildren(h('div', {cls:'spin', text:'İlanlar değerleniyor…'}));
     rpc('reos_ara', {p:p}).then(function(d){
+      var aFid = {};
       var kids = [h('div', {cls:'m', text:d.n + ' ilan (en çok 40 gösterilir; daralt: oda, bütçe, yer)'})];
       d.rows.forEach(function(r){ kids.push(h('div', {cls:'card' + (r.fsbo ? ' fsbo' : '')}, [
         h('div', {cls:'row'}, [r.fsbo ? chip('FSBO', 'good') : chip(r.ofis || 'danışman'), chip(r.kullanim || 'kullanım ?', /Kirac/i.test(r.kullanim || '') ? 'warn' : null),
           r.fark != null ? chip('fark %' + r.fark, r.fark < 0 ? 'good' : 'bad') : null, r.gun != null ? chip(r.gun + ' gün') : null]),
         h('div', {cls:'t', text:[r.mahalle, r.site, r.oda, r.brut ? r.brut + ' m²' : '', r.kat].filter(Boolean).join(' · ')}),
-        h('div', {cls:'row'}, [h('span', {cls:'price', text:tl(r.fiyat)}),
-          (r.deg && r.deg.oneri) ? chip('önerilen ' + tl(r.deg.oneri), null) : null,
-          (r.deg && r.deg.fark != null) ? chip((r.deg.fark > 0 ? '+' : '') + r.deg.fark + '%', r.deg.fark <= -5 ? 'good' : (r.deg.fark >= 8 ? 'bad' : null)) : null,
-          (r.deg && r.deg.derece && r.fsbo) ? chip('satıcı ' + r.deg.derece) : null]),
+        fiyatBagla(aFid, r.fid) || h('div', {cls:'row'}, [h('span', {cls:'price', text:tl(r.fiyat)}),
+          (r.deg && r.deg.oneri) ? chip('önerilen ' + tl(r.deg.oneri), null) : null]),
+        (r.deg && r.deg.derece && r.fsbo) ? h('div', {cls:'row'}, [chip('satıcı ' + r.deg.derece)]) : null,
         (r.deg && r.deg.yorum) ? h('div', {cls:'m', text:r.deg.yorum}) : null,
         (r.deg && r.deg.kaynak) ? h('div', {cls:'m', text:'Kaynak: ' + r.deg.kaynak}) : null,
         nedenPanel(r.fid),
@@ -589,6 +600,7 @@ function ara(){
           r.fsbo ? h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(r.fid || r.url || r.no, [r.mahalle, r.oda, tl(r.fiyat)].join(' '), r.tel, r.ad); }}) : null])])); });
       if (!d.rows.length) kids.push(empty('Bu kriterle aktif ilan yok. Bütçeyi ya da odayı genişlet.'));
       res.replaceChildren.apply(res, kids);
+      fiyatYukle(aFid, true);
     }).catch(function(e){ res.replaceChildren(h('div', {cls:'msg err', text:'Aranamadı: ' + e.message})); });
   }
 }
@@ -598,18 +610,19 @@ function huni(){
   loading('Huni getiriliyor…');
   rpc('reos_huni').then(function(rows){
     var out = [sec('Portföy hunisi', rows.length, 'Aday → Temas → Görüşme → Yetki → İşlem. Her kayıt bir portföy adayıdır.'), h('div', {cls:'m', text:'Yetki → Görüşme → Temas → Beklemede → Aday. Aradıktan sonra "Sonucu kaydet"e bas.'})];
-    var cur = null;
+    var cur = null, hPid = {};
     rows.forEach(function(p){
       if (p.asama !== cur) { cur = p.asama; out.push(h('h2', {text:cur})); }
       var late = p.takip && p.takip <= new Date().toISOString().slice(0,10);
       out.push(h('div', {cls:'card' + (late ? ' hot' : '')}, [
         h('div', {cls:'row'}, [chip(p.id), p.takip ? chip('takip ' + fmtDate(p.takip), late ? 'warn' : null) : null, p.deneme ? chip(p.deneme + ' deneme') : null, p.kim ? chip(p.kim) : null]),
         h('div', {cls:'t', text:(p.ad ? p.ad + ' · ' : '') + (p.baslik || '')}),
-        p.fiyat ? h('div', {cls:'price', text:tl(p.fiyat)}) : null,
+        fiyatBagla(hPid, p.id) || (p.fiyat ? h('div', {cls:'price', text:tl(p.fiyat)}) : null),
         p.adim ? h('div', {cls:'m', text:'Sonraki: ' + p.adim}) : null,
         h('div', {cls:'acts'}, [telLinks(p.tel), link(p.url), h('button', {cls:'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(p.id, p.ad || p.baslik, p.tel, p.ad); }})])]));
     });
     view.replaceChildren.apply(view, out);
+    fiyatYukle(hPid, false);
   }).catch(fail);
 }
 
@@ -906,12 +919,14 @@ function firsat(){
     var ol = d.olaylar || [];
     out.push(sec('Son 7 günün olayları', ol.length, 'Sistem her gece yakalar: alıcına uyan yeni ilan, portföy fiyatı düşünce uyan alıcılar, RE/MAX içi eşleşme, favori ilanda fiyat düşüşü / kalkış, yetkisi bitip sahibine dönen ilan.'));
     if (!ol.length) out.push(empty('Son 7 günde olay yok.'));
+    var oRef = {};
     ol.slice(0, 40).forEach(function(o){
       var es = o.eslesmeler || [], al = o.alicilar || [];
       out.push(h('div', {cls:'card'}, [
         h('div', {cls:'row'}, [h('span', {cls:'m', text:o.t}), chip(OLAY_AD[o.tur] || o.tur, o.tur === 'yetki_bitti_fsbo' || o.tur === 'portfoy_fiyat_dustu' ? 'warn' : 'info')]),
         h('div', {cls:'t', text:o.kisi ? o.kisi + (o.talep ? ' · ' + o.talep : '') : (o.baslik || '')}),
         o.eski && o.yeni ? h('div', {cls:'price', text:tl(o.eski) + ' → ' + tl(o.yeni)}) : (o.fiyat ? h('div', {cls:'price', text:tl(o.fiyat) + (o.ofis ? ' · eski ofis ' + o.ofis : '')}) : null),
+        /sahibinden\.com/.test(o.url || '') ? fiyatBagla(oRef, o.url) : null,
         es.length ? h('div', {cls:'m', text:(o.adet || es.length) + ' uyan ilan: ' + es.map(function(m){ return [m.oda, m.fiyat ? tl(m.fiyat) : ''].filter(Boolean).join(' '); }).join(' · ')}) : null,
         al.length ? h('div', {cls:'m', text:(o.alici_adet || al.length) + ' uyan alıcı: ' + al.map(function(a){ return (a.kisi || '?') + (a.butce ? ' (' + tl(a.butce) + ')' : ''); }).join(' · ')}) : null,
         h('div', {cls:'acts'}, [o.tel ? h('a', {cls:'btn ara', href:'tel:+90' + digits(o.tel), text:'ARA'}) : null, o.tel ? h('a', {cls:'btn', href:waLink(o.tel), target:'_blank', rel:'noopener', text:'WhatsApp'}) : null,
@@ -930,6 +945,7 @@ function firsat(){
         h('div', {cls:'acts'}, [q.tel ? h('a', {cls:'btn ara', href:'tel:+90' + digits(q.tel), text:'ARA'}) : null, q.tel ? h('a', {cls:'btn', href:waLink(q.tel), target:'_blank', rel:'noopener', text:'WhatsApp'}) : null])].filter(Boolean)));
     });
     view.replaceChildren.apply(view, out.filter(Boolean));
+    fiyatYukle(oRef, 'ref');
   }).catch(fail);
 }
 
