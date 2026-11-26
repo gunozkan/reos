@@ -234,7 +234,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.26e';
+var SURUM = '2026.11.26f';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -842,6 +842,10 @@ function gecmisPanel(id, baslik){
       if (g.ai) k.push(h('div', {cls:'ai', text:'Claude önerisi: ' + g.ai}));
       k.push(h('div', {cls:'tw'}, [h('table', {cls:'em'}, [h('tr', null, ['Zaman','Kim','Kanal','Ne oldu'].map(function(t){ return h('th', {text:t}); }))].concat(
         (g.olaylar || []).map(function(o){ return h('tr', null, [h('td', {text:o.t}), h('td', {text:o.kim}), h('td', {text:KANAL[o.kanal] || o.kanal || ''}), h('td', {text:o.not || ''})]); })))]));
+      var as = g.asamalar || [];
+      if (as.length) k.push(h('div', null, [h('div', {cls:'t', style:'font-size:14px', text:'Atama ve aşama geçmişi'}), h('div', {cls:'tw'}, [h('table', {cls:'em'}, [h('tr', null, ['Zaman','Kim yaptı','Ne oldu'].map(function(t){ return h('th', {text:t}); }))].concat(
+        as.map(function(z){ var atama = /^Atama:/.test(z.not || ''); return h('tr', null, [h('td', {text:z.t}), h('td', {text:z.kim || ''}),
+          h('td', {text:atama ? z.not.replace(/^Atama: /, 'İş verildi: ') : ((z.den ? z.den + ' → ' : '') + (z.e || '') + (z.not ? ' · ' + z.not : ''))})]); })))])]));
       if (g.notlar) k.push(h('details', null, [h('summary', {cls:'m', text:'Notlar'}), h('div', {cls:'msgbox', text:g.notlar})]));
       body.replaceChildren.apply(body, k);
     }).catch(function(e){ body.replaceChildren(h('div', {cls:'msg err', text:e.message})); });
@@ -936,18 +940,31 @@ function pano(){
     out.push(sec('Kime ne yazıldı, kim aradı', ak.length, 'Seçilen dönemde temas edilen ilanlar, en son temas üstte. Aynı ilana birden çok temas varsa tek satırda toplanır. Geçmiş\'e bas: o ilanın tüm notları ve Claude önerisi açılır.'));
     out.push(h('div', {cls:'row'}, [h('span', {cls:'m', text:'Kişi'}), kimSel]));
     if (!ak.length) out.push(empty('Bu dönemde kayıtlı temas yok.'));
-    var liste = h('div', {cls:'card', style:'gap:0;padding:4px 12px'});
+    var liste = h('div', {cls:'card', style:'gap:0;padding:4px 12px'}), fiyatSlot = {};
     ak.forEach(function(a, i){
+      var fs = a.id ? h('div', {cls:'price', style:'font-size:14px'}, [h('span', {cls:'m', text:'Fiyat ve önerilen fiyat hesaplanıyor…'})]) : null, ns = a.id ? h('div') : null;
+      if (a.id) fiyatSlot[a.id] = {fiyat:fs, neden:ns};
       liste.appendChild(h('div', {style:'padding:8px 0;' + (i ? 'border-top:1px solid var(--line)' : '')}, [
         h('div', {cls:'row'}, [h('span', {cls:'m', text:a.t}), chip(a.kim), chip(KANAL[a.kanal] || a.kanal, a.kanal === 'arama' ? 'good' : null), noChip(a.no),
           a.sahip && a.sahip !== a.kim ? chip('şimdi ' + a.sahip) : null, a.onceki.length ? chip((a.onceki.length + 1) + ' temas', 'warn') : null]),
         h('div', {cls:'t', style:'font-size:14px', text:a.baslik || ''}),
         h('div', {cls:'m', text:a.not || ''}),
+        fs,
         a.onceki.length ? h('div', {cls:'m', style:'opacity:.8', text:'Önceki: ' + a.onceki.map(function(o){ return o.t + ' ' + (KANAL[o.kanal] || o.kanal) + ' · ' + (o.not || ''); }).join(' | ')}) : null,
         a.id ? h('div', {cls:'acts'}, [link(a.url), noKopya(a.no), ataSec(a.id, a.sahip, a.no, a.baslik)]) : null,
-        a.id ? gecmisPanel(a.id, 'Geçmiş') : null]));
+        ns,
+        a.id ? gecmisPanel(a.id, 'Geçmiş (temaslar, atamalar)') : null].filter(Boolean)));
     });
     if (ak.length) out.push(liste);
+    var fIds = Object.keys(fiyatSlot);
+    if (fIds.length) rpc('reos_fiyatlar', {p_ids:fIds}).then(function(fm){
+      fIds.forEach(function(id){ var f = (fm || {})[id], sl = fiyatSlot[id]; if (!f) return;
+        var dusme = f.ilk_fiyat && f.fiyat && f.fiyat < f.ilk_fiyat;
+        sl.fiyat.replaceChildren(document.createTextNode('İlan fiyatı ' + (dusme ? tl(f.ilk_fiyat) + ' → ' : '') + (f.fiyat ? tl(f.fiyat) : '?') + ' · Önerilen ' + (f.oneri ? tl(f.oneri) : 'hesaplanamadı')
+          + (f.oneri && f.fiyat ? ' (' + (f.fiyat > f.oneri ? '%' + Math.round((f.fiyat / f.oneri - 1) * 100) + ' üstünde' : (f.fiyat < f.oneri ? '%' + Math.round((1 - f.fiyat / f.oneri) * 100) + ' altında' : 'aynı')) + ')' : '')));
+        if (f.kalkti) sl.fiyat.appendChild(h('span', {cls:'kalktiNot', text:' · yayından kalktı'}));
+        var np = nedenPanel(f.fid); if (np) sl.neden.replaceChildren(np); });
+    }).catch(function(){});
     view.replaceChildren.apply(view, out.filter(Boolean));
   }).catch(fail);
 }
