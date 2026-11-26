@@ -231,7 +231,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.26b';
+var SURUM = '2026.11.26c';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -266,7 +266,7 @@ function loading(t){ view.replaceChildren(h('div', {cls:'spin', text:t || 'Yükl
 /* ---------- sonuç kaydı ---------- */
 var dlg = document.getElementById('dlg'), curRef = null;
 function kaydetAc(ref, baslik, phone, name, tur){
-  curRef = {ref: ref || '', phone: phone || '', name: name || '', tur: tur || '', arama: /^ara/.test(tur || ''), kaydedildi: false};
+  curRef = {ref: ref || '', phone: phone || '', name: name || '', tur: tur || '', arama: /^ara/.test(tur || ''), kaydedildi: false, baslik: baslik || ''};
   document.getElementById('kbaslik').textContent = 'Sonuç kaydet: ' + (baslik || ref || '');
   document.getElementById('kref').textContent = ref ? ('Kayıt: ' + ref) : '';
   ['k_ozet','k_tarih','k_adim','k_neden','k_sonuc'].forEach(function(id){ document.getElementById(id).value = ''; });
@@ -298,6 +298,8 @@ document.getElementById('kform').addEventListener('submit', function(ev){
   var btn = document.getElementById('ksave'); btn.disabled = true; curRef.kaydedildi = true;
   document.getElementById('kres').textContent = 'Kaydediliyor…';
   rpc('reos_kaydet', {p:p}).then(function(r){
+    if (uyeMi() && (p.tur === 'cevap' || ['olumlu','randevu','dusunecek'].indexOf(p.sonuc) >= 0))
+      bildir('Özkan', 'Sahip cevap verdi', AD + ': ' + (curRef.baslik || '') + ' · "' + (p.summary || '').slice(0, 120) + '"');
     var s = (r && (r.huni || r.id)) ? ('Kaydedildi: ' + (r.huni || r.id) + (r.asama ? ' · ' + r.asama : '') + (r.takip ? ' · sonraki ' + fmtDate(r.takip) : '') + (r.adim ? ' · ' + r.adim : '')) : 'Kaydedildi.';
     if (r && r.yeni_kayit && r.ilan_bulundu === false) s += ' (İlan veritabanında yok; yeni huni kaydı telefon/ad ile açıldı.)';
     document.getElementById('kres').textContent = s;
@@ -708,11 +710,12 @@ function sevilay(){
 
 /* ---------- Takip (ortak) ---------- */
 var takipFiltre = {kim:'', durum:'bugun'};
-function ozetIstedi(ref, btn, slot){
+function ozetIstedi(ref, btn, slot, baslik){
   btn.disabled = true; btn.textContent = 'Hazırlanıyor…';
   rpc('reos_ozet_istedi', {p_ref:ref}).then(function(r){
     if (!r.ok) { btn.disabled = false; btn.textContent = 'Ön RPA gönder'; slot.replaceChildren(h('div', {cls:'msg err', text:r.neden || 'Hazırlanamadı'})); return; }
     btn.textContent = 'Ön RPA hazır';
+    if (uyeMi()) bildir('Özkan', 'Sahip özet istedi, aramanı bekliyor', AD + ': ' + (baslik || r.baslik || '') + '. Ön RPA gönderildi; bugün ara.');
     var cp = h('button', {text:'Özeti kopyala'}); cp.addEventListener('click', function(){ kopyala(r.metin, cp); });
     var wa = r.tel ? h('a', {cls:'btn pri', href:waLink(r.tel, r.metin), target:'_blank', rel:'noopener', text:'WhatsApp\'ta gönder'}) : null;
     slot.replaceChildren(h('div', {cls:'card hot'}, [
@@ -770,7 +773,7 @@ function takip(){
         h('button', {cls:(wa || araBtn) ? '' : 'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(ref, [mah(x.mahalle), x.oda].join(' ') || x.baslik, x.tel, x.ad, x.cevap ? '' : (aramaAdimi ? adim : '')); }}),
         adim === 'birak' && !x.cevap ? kayitBtn('30 gün beklemeye al', ref, {summary:'5 denemede ulaşılamadı, 30 gün beklemede', tur:'birak'}, takip) : null, ata]));
       var ozBtn = h('button', {text:'Ön RPA gönder'});
-      ozBtn.addEventListener('click', function(){ ozetIstedi(ref, ozBtn, slot); });
+      ozBtn.addEventListener('click', function(){ ozetIstedi(ref, ozBtn, slot, [mah(x.mahalle), x.oda].filter(Boolean).join(' ') + (x.no ? ' · ilan ' + x.no : '')); });
       kids.push(h('div', {cls:'acts'}, [ozBtn, h('span', {cls:'m', text:'Sahip "bilgi / özet gönderin" dediyse: rakamsız Ön RPA hazırlanır, iş Özkan\'a düşer.'})]));
       if (!x.tel) kids.push(telEkle(ref, function(){ takip(); }));
       kids.push(slot); kids.push(nedenPanel(x.fid));
@@ -778,6 +781,43 @@ function takip(){
     });
     view.replaceChildren.apply(view, out.filter(Boolean));
   }).catch(fail);
+}
+
+/* ---------- telefon bildirimi (web push) ---------- */
+function bildir(kime, baslik, metin, url){
+  if (!kime || kime === AD) return Promise.resolve();
+  return sb.functions.invoke('push-bildir', {body:{kime:kime, baslik:baslik, metin:metin || '', url:url || 'https://gunozkan.github.io/reos/#pano'}}).catch(function(){});
+}
+function b64ToU8(s){ s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var r = atob(s), u = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) u[i] = r.charCodeAt(i); return u; }
+var PUSH_VAR = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+var IOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+var STANDALONE = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
+function bildirimAc(btn, msg){
+  btn.disabled = true; msg.textContent = 'İzin isteniyor…';
+  Notification.requestPermission().then(function(p){
+    if (p !== 'granted') throw new Error('İzin verilmedi. Telefonun Ayarlar → Bildirimler → REOS bölümünden izin ver, sonra tekrar bas.');
+    return sb.functions.invoke('push-bildir', {body:{islem:'pub'}});
+  }).then(function(r){
+    if (r.error || !r.data || !r.data.pub) throw new Error('Bildirim anahtarı alınamadı, biraz sonra tekrar dene.');
+    return navigator.serviceWorker.ready.then(function(reg){ return reg.pushManager.getSubscription().then(function(s){ return s || reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToU8(r.data.pub)}); }); });
+  }).then(function(sub){ var j = sub.toJSON(); j.ua = navigator.userAgent.slice(0, 120); return rpc('reos_push_kaydet', {p:j}); })
+  .then(function(){ msg.textContent = 'Bildirimler bu telefonda açık.'; btn.remove(); })
+  .catch(function(e){ btn.disabled = false; msg.textContent = e.message; });
+}
+function bildirimKutusu(){
+  if (IOS && !STANDALONE) return h('div', {cls:'msg', text:'Telefon bildirimi için: Safari\'de Paylaş → "Ana Ekrana Ekle". Sonra REOS\'u ana ekrandaki simgeden aç; burada "Bildirimleri aç" düğmesi çıkar.'});
+  if (!PUSH_VAR) return null;
+  var msg = h('div', {cls:'m', text:'Sana iş verilince' + (ROL === 'ozkan' ? ', ekipten biri "sahip cevap verdi" kaydedince' : '') + ' telefonuna bildirim düşsün.'});
+  var btn = h('button', {cls:'pri', text:'Bildirimleri aç'});
+  var box = h('div', {cls:'msg', hidden:true}, [msg, h('div', {cls:'acts'}, [btn])]);
+  btn.addEventListener('click', function(){ bildirimAc(btn, msg); });
+  navigator.serviceWorker.ready.then(function(reg){ return reg.pushManager.getSubscription(); }).then(function(s){
+    if (s && Notification.permission === 'granted') { var j = s.toJSON(); j.ua = navigator.userAgent.slice(0, 120); rpc('reos_push_kaydet', {p:j}).catch(function(){}); box.remove(); }
+    else box.hidden = false;
+  }).catch(function(){ box.hidden = false; });
+  setTimeout(function(){ if (box.isConnected && box.hidden && Notification.permission !== 'granted') box.hidden = false; }, 2500);
+  return box;
 }
 
 /* ---------- Pano: ekip ne yaptı, kime ne yazıldı, kim cevap verdi (herkes görür) ---------- */
@@ -813,6 +853,7 @@ function ataSec(id, sahip, no, baslik, slot, onDone){
       var box = h('div', {cls:'row'}, [h('span', {cls:'m', text:'✓ ' + yonelme(kime) + ' verildi.'}),
         kime !== 'Özkan' ? h('a', {cls:'btn pri', href:'https://wa.me/?text=' + encodeURIComponent(metin), target:'_blank', rel:'noopener', text:'WhatsApp\'tan haber ver'}) : null]);
       if (slot) slot.replaceChildren(box); else sel.replaceWith(box);
+      bildir(kime, 'Sana yeni iş verildi', (baslik || '') + (no ? ' · ilan ' + no : '') + ' · ' + (AD || 'Özkan') + ' verdi');
       if (onDone) onDone(r);
     }).catch(function(e){ sel.disabled = false; alert(e.message); }); });
   return sel;
@@ -825,6 +866,7 @@ function pano(){
     out.push(sec('Pano', null, 'Ekibin FSBO işleri tek yerde. Herkes görür. "Mesaj" ve "Arama": o gün temas edilen ilan sayısı (aynı ilana aynı gün iki kez yazılsa bir sayılır). Cevap ve kayıp seçilen dönemde. Açık ve geciken: şu anki durum.'));
     out.push(h('div', {cls:'seg'}, [seg(1, 'Bugün'), seg(7, '7 gün'), seg(30, '30 gün')]));
     out.push(h('div', {cls:'m', text:d.bas + ' – bugün · güncellendi ' + d.simdi}));
+    out.push(bildirimKutusu());
 
     var yeni = d.yeni || [];
     if (yeni.length) {
@@ -846,7 +888,7 @@ function pano(){
       var sel = h('select', {style:'width:auto'}, [h('option', {value:'', text:'Ekibe dağıt…'}), h('option', {value:'paylastir', text:'Ekipte paylaştır'})].concat(EKIP.filter(function(e){ return e.ad !== 'Özkan'; }).map(function(e){ return h('option', {value:e.ad, text:'Hepsi ' + yonelme(e.ad)}); })));
       sel.addEventListener('change', function(){ if (!sel.value) return;
         if (!confirm(d.ozkan_aday + ' aday ' + (sel.value === 'paylastir' ? 'ekipte paylaştırılacak' : yonelme(sel.value) + ' verilecek') + '. Bugünün takip listesine düşer. Emin misin?')) { sel.value = ''; return; }
-        sel.disabled = true; rpc('reos_dagit', {p_kime:sel.value}).then(function(r){ alert(r.ok ? r.adet + ' aday verildi.' : (r.neden || 'Olmadı')); pano(); }); });
+        sel.disabled = true; rpc('reos_dagit', {p_kime:sel.value}).then(function(r){ if (r.ok) (r.kime || []).forEach(function(k){ bildir(k, 'Sana yeni işler verildi', 'Özkan ' + (r.kime.length > 1 ? 'ekibe ' + r.adet : r.adet) + ' yeni FSBO ilanı dağıttı. Takip sekmesinde.', 'https://gunozkan.github.io/reos/#takip'); }); alert(r.ok ? r.adet + ' aday verildi.' : (r.neden || 'Olmadı')); pano(); }); });
       uy.push(h('div', {cls:'msg'}, [h('div', {text:'Sende temas edilmemiş ' + d.ozkan_aday + ' aday var (sistemin arama önerileri, aktif ilan). Sen aramayacaksan ekibe ver.'}), h('div', {cls:'acts'}, [sel])]));
     }
     if (uy.length) { out.push(sec('Dikkat', uy.length)); uy.forEach(function(x){ out.push(x); }); }
@@ -989,6 +1031,7 @@ var KILAVUZ_UYE = [
   ['Telefon numarası yoksa', ['İlanı aç, numarayı kopyala, karttaki kutuya yapıştır, "Telefonu ekle"ye bas. ARA ve WhatsApp düğmeleri çıkar.', 'Numara hiç yoksa mesajı sahibinden\'den gönder ve "Sahibinden\'den gönderdim"e bas.']],
   ['Yanlışlıkla bastıysan', ['WhatsApp gönderiminden sonra 15 dakika "Geri al" düğmesi görünür. Ona bas.']],
   ['Not yazmak yerine konuş', ['Sonuç kutusunda klavyedeki mikrofon simgesine bas ve söyle. Örn: "Aradım, kiracı var, 2 hafta sonra tekrar ara." Sistem "2 hafta sonra"yı anlar ve tarihi kendisi koyar.']],
+  ['Telefon bildirimi', ['iPhone: Safari\'de REOS\'u aç → Paylaş → "Ana Ekrana Ekle". Sonra ana ekrandaki REOS simgesinden aç.', 'Pano\'da "Bildirimleri aç"a bas, izin ver. Sana iş verilince telefonuna bildirim düşer.']],
   ['Bir şey takıldıysa', ['Sağ üstteki ☰ menüden "Sayfayı yenile"ye bas.', 'Hâlâ olmuyorsa Özkan\'a yaz, ekran görüntüsü at.']]
 ];
 var KILAVUZ_OZKAN = [
