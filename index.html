@@ -114,7 +114,7 @@ header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px
 <div id="menu" hidden></div>
 <main id="view"><div class="spin">Yükleniyor…</div></main>
 <nav id="nav" hidden>
-  <a href="#bugun" data-r="ozkan">Bugün</a><a href="#sevilay" data-r="ozkan uye">Bugün aranacaklar</a><a href="#takip" data-r="ozkan uye">Takip</a><a href="#ara" data-r="ozkan">Alıcıya ara</a><a href="#ilan" data-r="ozkan">İlan</a>
+  <a href="#pano" data-r="ozkan uye">Pano</a><a href="#bugun" data-r="ozkan">Bugün</a><a href="#sevilay" data-r="ozkan uye">Bugün aranacaklar</a><a href="#takip" data-r="ozkan uye">Takip</a><a href="#ara" data-r="ozkan">Alıcıya ara</a><a href="#ilan" data-r="ozkan">İlan</a>
 </nav>
 
 <dialog id="dlg">
@@ -226,7 +226,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.25i';
+var SURUM = '2026.11.26a';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -261,7 +261,7 @@ function loading(t){ view.replaceChildren(h('div', {cls:'spin', text:t || 'Yükl
 /* ---------- sonuç kaydı ---------- */
 var dlg = document.getElementById('dlg'), curRef = null;
 function kaydetAc(ref, baslik, phone, name, tur){
-  curRef = {ref: ref || '', phone: phone || '', name: name || '', tur: tur || ''};
+  curRef = {ref: ref || '', phone: phone || '', name: name || '', tur: tur || '', arama: /^ara/.test(tur || ''), kaydedildi: false};
   document.getElementById('kbaslik').textContent = 'Sonuç kaydet: ' + (baslik || ref || '');
   document.getElementById('kref').textContent = ref ? ('Kayıt: ' + ref) : '';
   ['k_ozet','k_tarih','k_adim','k_neden','k_sonuc'].forEach(function(id){ document.getElementById(id).value = ''; });
@@ -274,6 +274,12 @@ function kaydetAc(ref, baslik, phone, name, tur){
   try { dlg.showModal(); } catch(e) { dlg.setAttribute('open', ''); }
 }
 document.getElementById('kclose').addEventListener('click', function(){ dlg.close(); });
+/* ARA'ya basılıp sonuç girilmeden kutu kapatılırsa arama yine de kaydolur (Pano'da görünsün diye). */
+dlg.addEventListener('close', function(){
+  var c = curRef; if (!c || !c.arama || c.kaydedildi) return; c.kaydedildi = true;
+  rpc('reos_kaydet', {p:{ref:c.ref, phone:c.phone || undefined, name:c.name || undefined, summary:'Arandı (sonuç girilmedi)', channel:'arama', sonuc:'ulasilamadi', tur:c.tur}})
+    .then(function(){ if (['#pano','#takip','#sevilay'].indexOf(location.hash) >= 0) route(); }).catch(function(){});
+});
 document.getElementById('kform').addEventListener('submit', function(ev){
   ev.preventDefault();
   var p = {ref: curRef.ref, phone: curRef.phone, name: curRef.name,
@@ -284,14 +290,14 @@ document.getElementById('kform').addEventListener('submit', function(ev){
   if (!p.summary && p.sonuc) p.summary = document.getElementById('k_sonuc').selectedOptions[0].textContent;
   if (!p.summary) { document.getElementById('kres').textContent = 'Sonucu seç ya da bir cümleyle anlat (mikrofonla da olur).'; return; }
   Object.keys(p).forEach(function(k){ if (p[k] === '') delete p[k]; });
-  var btn = document.getElementById('ksave'); btn.disabled = true;
+  var btn = document.getElementById('ksave'); btn.disabled = true; curRef.kaydedildi = true;
   document.getElementById('kres').textContent = 'Kaydediliyor…';
   rpc('reos_kaydet', {p:p}).then(function(r){
     var s = (r && (r.huni || r.id)) ? ('Kaydedildi: ' + (r.huni || r.id) + (r.asama ? ' · ' + r.asama : '') + (r.takip ? ' · sonraki ' + fmtDate(r.takip) : '') + (r.adim ? ' · ' + r.adim : '')) : 'Kaydedildi.';
     if (r && r.yeni_kayit && r.ilan_bulundu === false) s += ' (İlan veritabanında yok; yeni huni kaydı telefon/ad ile açıldı.)';
     document.getElementById('kres').textContent = s;
-    setTimeout(function(){ dlg.close(); if (['#bugun','#huni','#sevilay','#takip',''].indexOf(location.hash) >= 0) route(); }, 1800);
-  }).catch(function(e){ btn.disabled = false; document.getElementById('kres').textContent = 'Kaydedilemedi: ' + e.message; });
+    setTimeout(function(){ dlg.close(); if (['#pano','#bugun','#huni','#sevilay','#takip',''].indexOf(location.hash) >= 0) route(); }, 1800);
+  }).catch(function(e){ btn.disabled = false; curRef.kaydedildi = false; document.getElementById('kres').textContent = 'Kaydedilemedi: ' + e.message; });
 });
 
 /* ---------- Bugün ---------- */
@@ -771,6 +777,100 @@ function takip(){
   }).catch(fail);
 }
 
+/* ---------- Pano: ekip ne yaptı, kime ne yazıldı, kim cevap verdi (herkes görür) ---------- */
+var panoFiltre = {gun:7, kim:'hepsi'};
+var KANAL = {whatsapp:'WhatsApp', arama:'Telefon', sahibinden:'sahibinden', mesaj:'Mesaj', gorusme:'Yüz yüze'};
+function gecmisPanel(id, baslik){
+  var body = h('div', {style:'display:grid;gap:6px;margin-top:6px'}, [h('div', {cls:'spin', text:'Geçmiş getiriliyor…'})]), yuklendi = false;
+  var det = h('details', null, [h('summary', {cls:'m', text:baslik || 'Tüm geçmiş'}), body]);
+  det.addEventListener('toggle', function(){ if (!det.open || yuklendi) return; yuklendi = true;
+    rpc('reos_gecmis', {p_id:id}).then(function(g){
+      if (!g) { body.replaceChildren(empty('Kayıt bulunamadı.')); return; }
+      var k = [h('div', {cls:'row'}, [chip(g.id), chip(g.kim), chip(g.asama), chip((g.deneme || 0) + ' deneme'), g.takip ? chip('takip ' + fmtDate(g.takip)) : null])];
+      if (g.adim) k.push(h('div', {cls:'m', text:'Sonraki adım: ' + g.adim}));
+      if (g.kayip_neden) k.push(h('div', {cls:'m', text:'Kayıp nedeni: ' + g.kayip_neden}));
+      if (g.ai) k.push(h('div', {cls:'ai', text:'Claude önerisi: ' + g.ai}));
+      k.push(h('div', {cls:'tw'}, [h('table', {cls:'em'}, [h('tr', null, ['Zaman','Kim','Kanal','Ne oldu'].map(function(t){ return h('th', {text:t}); }))].concat(
+        (g.olaylar || []).map(function(o){ return h('tr', null, [h('td', {text:o.t}), h('td', {text:o.kim}), h('td', {text:KANAL[o.kanal] || o.kanal || ''}), h('td', {text:o.not || ''})]); })))]));
+      if (g.notlar) k.push(h('details', null, [h('summary', {cls:'m', text:'Notlar'}), h('div', {cls:'msgbox', text:g.notlar})]));
+      body.replaceChildren.apply(body, k);
+    }).catch(function(e){ body.replaceChildren(h('div', {cls:'msg err', text:e.message})); });
+  });
+  return det;
+}
+function pano(){
+  loading('Pano hazırlanıyor…');
+  rpc('reos_pano', {p:{gun:panoFiltre.gun}}).then(function(d){
+    function seg(val, text){ return h('button', {'aria-pressed':String(panoFiltre.gun === val), text:text, onclick:function(){ panoFiltre.gun = val; pano(); }}); }
+    var ekip = d.ekip || [], out = [];
+    out.push(sec('Pano', null, 'Ekibin FSBO işleri tek yerde. Herkes görür. "Mesaj" ve "Arama": o gün temas edilen ilan sayısı (aynı ilana aynı gün iki kez yazılsa bir sayılır). Cevap ve kayıp seçilen dönemde. Açık ve geciken: şu anki durum.'));
+    out.push(h('div', {cls:'seg'}, [seg(1, 'Bugün'), seg(7, '7 gün'), seg(30, '30 gün')]));
+    out.push(h('div', {cls:'m', text:d.bas + ' – bugün · güncellendi ' + d.simdi}));
+
+    /* uyarılar */
+    var uy = [];
+    var bekleyen = (d.cevaplar || []).filter(function(c){ return c.ozkan_bekliyor; });
+    if (bekleyen.length) uy.push(h('div', {cls:'msg err', text:bekleyen.length + ' sahip cevap verdi, Özkan\'ın dönmesi bekleniyor: ' + bekleyen.map(function(c){ return c.id + ' (' + c.gun + ' gün)'; }).join(', ') + '. Aşağıda "Cevap verenler".'}));
+    ekip.forEach(function(e){
+      if (e.ad === 'Özkan') return;
+      if (e.mesaj >= 10 && e.arama < e.mesaj * 0.3) uy.push(h('div', {cls:'msg', text:e.ad + ': ' + e.mesaj + ' ilana mesaj, ' + e.arama + ' ilana arama kaydı. Kural önce ARA. Aradıysan ARA düğmesinden ara ki kayda geçsin.'}));
+      if (e.geciken) uy.push(h('div', {cls:'msg', text:e.ad + ': ' + e.geciken + ' ilanın takip günü geçti.'}));
+    });
+    if (ROL === 'ozkan' && d.ozkan_aday) {
+      var sel = h('select', {style:'width:auto'}, [h('option', {value:'', text:'Ekibe dağıt…'}), h('option', {value:'paylastir', text:'Ekipte paylaştır'})].concat(EKIP.filter(function(e){ return e.ad !== 'Özkan'; }).map(function(e){ return h('option', {value:e.ad, text:'Hepsi ' + yonelme(e.ad)}); })));
+      sel.addEventListener('change', function(){ if (!sel.value) return;
+        if (!confirm(d.ozkan_aday + ' aday ' + (sel.value === 'paylastir' ? 'ekipte paylaştırılacak' : yonelme(sel.value) + ' verilecek') + '. Bugünün takip listesine düşer. Emin misin?')) { sel.value = ''; return; }
+        sel.disabled = true; rpc('reos_dagit', {p_kime:sel.value}).then(function(r){ alert(r.ok ? r.adet + ' aday verildi.' : (r.neden || 'Olmadı')); pano(); }); });
+      uy.push(h('div', {cls:'msg'}, [h('div', {text:'Sende temas edilmemiş ' + d.ozkan_aday + ' aday var (sistemin arama önerileri, aktif ilan). Sen aramayacaksan ekibe ver.'}), h('div', {cls:'acts'}, [sel])]));
+    }
+    if (uy.length) { out.push(sec('Dikkat', uy.length)); uy.forEach(function(x){ out.push(x); }); }
+
+    /* kişi kişi */
+    out.push(sec('Kim ne yaptı', null, 'Mesaj / Arama: temas edilen ilan. Cevap: sahibin döndüğü. Açık: şu an takipte. Bugün: bugün takip günü gelen. Geciken: takip günü geçmiş.'));
+    out.push(h('div', {cls:'tw'}, [h('table', {cls:'em'}, [h('tr', null, ['Kim','Mesaj','Arama','Cevap','Kayıp','Açık','Bugün','Geciken'].map(function(t){ return h('th', {text:t}); }))].concat(ekip.map(function(e){
+      return h('tr', null, [h('td', null, [h('b', {text:e.ad})]), h('td', {text:String(e.mesaj)}), h('td', {text:String(e.arama)}), h('td', {text:String(e.cevap)}), h('td', {text:String(e.kayip)}),
+        h('td', {text:String(e.acik)}), h('td', {text:String(e.bugun)}), h('td', null, [e.geciken ? chip(String(e.geciken), 'bad') : '0'])]); })))]));
+    var gl = d.gunluk || [];
+    if (gl.length && panoFiltre.gun > 1) out.push(h('details', {cls:'card'}, [h('summary', {text:'Gün gün'}), h('div', {cls:'tw'}, [h('table', {cls:'em'}, [h('tr', null, ['Gün','Kim','Mesaj','Arama'].map(function(t){ return h('th', {text:t}); }))].concat(gl.map(function(g){
+      return h('tr', null, [h('td', {text:g.gun}), h('td', {text:g.kim}), h('td', {text:String(g.mesaj)}), h('td', {text:String(g.arama)})]); })))])]));
+
+    /* cevap verenler */
+    var cv = d.cevaplar || [];
+    out.push(sec('Cevap verenler', cv.length, 'Son 60 günde ilan sahibinin döndüğü kayıtlar. Kırmızı: Özkan\'ın aranması bekleniyor ve henüz Özkan kaydı yok.'));
+    if (!cv.length) out.push(empty('Son 60 günde cevap veren sahip yok.'));
+    cv.forEach(function(c){
+      out.push(h('div', {cls:'card' + (c.ozkan_bekliyor ? ' hot' : '')}, [
+        h('div', {cls:'row'}, [chip(c.id), chip(c.kim), chip(c.asama, c.asama === 'Kayıp' ? 'bad' : null), chip('cevap ' + c.cevap),
+          c.ozkan_bekliyor ? chip('Özkan bekleniyor · ' + c.gun + ' gün', 'bad') : null]),
+        h('div', {cls:'t', text:(c.ad ? c.ad + ' · ' : '') + (c.baslik || '')}),
+        c.fiyat ? h('div', {cls:'price', text:tl(c.fiyat)}) : null,
+        c.ozet ? h('div', {cls:'m', text:'Son not: "' + c.ozet + '"'}) : null,
+        c.kayip_neden ? h('div', {cls:'m', text:'Kayıp nedeni: ' + c.kayip_neden}) : null,
+        c.adim ? h('div', {cls:'m', text:'Sonraki adım: ' + c.adim}) : null,
+        h('div', {cls:'acts'}, [telLinks(c.tel), link(c.url), h('button', {cls:c.ozkan_bekliyor ? 'pri' : '', text:'Sonucu kaydet', onclick:function(){ kaydetAc(c.id, c.ad || c.baslik, c.tel, c.ad); }})]),
+        gecmisPanel(c.id)].filter(Boolean)));
+    });
+
+    /* akış */
+    var ak = (d.akis || []).filter(function(a){ return panoFiltre.kim === 'hepsi' || a.kim === panoFiltre.kim; });
+    var kimSel = h('select', {style:'width:auto'}, [h('option', {value:'hepsi', text:'Herkes'})].concat(ekip.map(function(e){ return h('option', {value:e.ad, text:e.ad}); })));
+    kimSel.value = panoFiltre.kim; kimSel.addEventListener('change', function(){ panoFiltre.kim = kimSel.value; pano(); });
+    out.push(sec('Kime ne yazıldı, kim aradı', ak.length, 'Seçilen dönemdeki her temas, en yenisi üstte. Satıra bas: o ilanın tüm geçmişi ve Claude önerisi açılır.'));
+    out.push(h('div', {cls:'row'}, [h('span', {cls:'m', text:'Kişi'}), kimSel]));
+    if (!ak.length) out.push(empty('Bu dönemde kayıtlı temas yok.'));
+    var liste = h('div', {cls:'card', style:'gap:0;padding:4px 12px'});
+    ak.forEach(function(a, i){
+      liste.appendChild(h('div', {style:'padding:8px 0;' + (i ? 'border-top:1px solid var(--line)' : '')}, [
+        h('div', {cls:'row'}, [h('span', {cls:'m', text:a.t}), chip(a.kim), chip(KANAL[a.kanal] || a.kanal, a.kanal === 'arama' ? 'good' : null), a.id ? chip(a.id) : null]),
+        h('div', {cls:'t', style:'font-size:14px', text:a.baslik || ''}),
+        h('div', {cls:'m', text:a.not || ''}),
+        a.id ? gecmisPanel(a.id, 'Geçmiş') : null]));
+    });
+    if (ak.length) out.push(liste);
+    view.replaceChildren.apply(view, out.filter(Boolean));
+  }).catch(fail);
+}
+
 /* ---------- sahibinden Pro açma testi ---------- */
 function protest(){
   var no = '1314882351';
@@ -815,13 +915,13 @@ function girisEkrani(not){
 function cikis(){ sb.auth.signOut().then(function(){ ROL = null; girisEkrani('Çıkış yapıldı.'); }); }
 
 /* ---------- yönlendirme ---------- */
-var R = {bugun:bugun, ilan:ilan, ara:ara, huni:huni, kisi:kisi, sevilay:sevilay, takip:takip, protest:protest};
+var R = {pano:pano, bugun:bugun, ilan:ilan, ara:ara, huni:huni, kisi:kisi, sevilay:sevilay, takip:takip, protest:protest};
 function route(){
   if (!ROL) return;
-  var def = uyeMi() ? 'sevilay' : 'bugun';
+  var def = 'pano';
   document.getElementById('menu').hidden = true;
   var k = (location.hash || '#' + def).slice(1);
-  if (!R[k] || (uyeMi() && ['sevilay','takip','kilavuz'].indexOf(k) < 0)) k = def;
+  if (!R[k] || (uyeMi() && ['pano','sevilay','takip','kilavuz'].indexOf(k) < 0)) k = def;
   [].forEach.call(document.querySelectorAll('nav a'), function(a){
     a.hidden = (a.getAttribute('data-r') || '').split(' ').indexOf(ROL) < 0;
     if (a.getAttribute('href') === '#' + k) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
@@ -853,7 +953,7 @@ function menuKur(){
   document.addEventListener('click', function(e){ if (!m.hidden && !m.contains(e.target) && e.target !== b) m.hidden = true; });
 }
 var KILAVUZ_UYE = [
-  ['Her sabah', ['Uygulamayı aç. Önce "Takip" sekmesine bak: bugün senden haber bekleyen ilanlar orada.', 'Sonra "Bugün aranacaklar" sekmesine geç: bugün ilk kez temas edeceğin ilanlar orada.']],
+  ['Her sabah', ['Uygulama Pano ile açılır: ekibin ne yaptığı, kim cevap verdi, sende geciken var mı orada görünür.', 'Sonra "Takip" sekmesine bak: bugün senden haber bekleyen ilanlar orada.', 'Sonra "Bugün aranacaklar" sekmesine geç: bugün ilk kez temas edeceğin ilanlar orada.']],
   ['Yeni bir ilan sahibine ilk temas', ['Saat 10:00 ile 19:00 arasıysa büyük yeşil ARA düğmesine bas.', 'Açarsa: kendini tanıt, ilanı sor, ilgileniyorsa "Özkan Bey sizi kısaca arasın, hangi saat uygun?" de.', 'Açmazsa ya da saat uygun değilse "WhatsApp\'ta gönder"e bas. Mesaj hazır gelir, sen sadece gönder\'e basarsın.', 'Telefon kapanınca açılan kutuda ne olduğunu seç (Cevap yok, Ulaşılamadı, Olumlu…), bir cümle ekle, Kaydet.']],
   ['Altın kural', ['Cevap vermeyen birine ikinci mesaj ATMA. Sıradaki adım her zaman ARAMAK.', 'Sıra: Mesaj → ertesi gün ARA → 2 gün sonra başka saatte ARA → "aradım, ulaşamadım" mesajı → ARA → 30 gün bekle.', 'Uygulama sana her ilan için sıradaki adımı zaten gösterir. Kartta ne yazıyorsa onu yap.']],
   ['Sahibi olumlu döndüyse', ['Sonucu "Olumlu" ya da "Randevu" diye kaydet. İş kendiliğinden Özkan\'a geçer, o arar.', 'Fiyat, yetki, komisyon konuşma. "Özkan Bey size detaylı bilgi verecek" de.']],
@@ -864,7 +964,7 @@ var KILAVUZ_UYE = [
   ['Bir şey takıldıysa', ['Sağ üstteki ☰ menüden "Sayfayı yenile"ye bas.', 'Hâlâ olmuyorsa Özkan\'a yaz, ekran görüntüsü at.']]
 ];
 var KILAVUZ_OZKAN = [
-  ['Ekranlar', ['Bugün: canlı piyasa özeti, ekipten devralacakların, takip günü gelenler, görevler, fırsatlar.', 'Bugün aranacaklar: ekibin ilk temas listesi (sen de görürsün).', 'Takip: herkesin temasları. "Kim" listesinden kişi seç; karttaki "İşi ver" ile işi Sevilay\'a, Arzu\'ya ver ya da kendine al.', 'Alıcıya ara / İlan: alıcı için ilan bul, bir ilanı değerle.', '☰ menü: Kişi ara, Portföy hunisi, kılavuz, çıkış.']],
+  ['Ekranlar', ['Pano (açılış ekranı, ekip de görür): kim kaç ilana mesaj attı, kaçını aradı, kim cevap verdi, sende bekleyenler, kime ne yazıldı. Satıra basınca o ilanın tüm geçmişi açılır.', 'Bugün: canlı piyasa özeti, ekipten devralacakların, takip günü gelenler, görevler, fırsatlar.', 'Bugün aranacaklar: ekibin ilk temas listesi (sen de görürsün).', 'Takip: herkesin temasları. "Kim" listesinden kişi seç; karttaki "İşi ver" ile işi Sevilay\'a, Arzu\'ya ver ya da kendine al.', 'Alıcıya ara / İlan: alıcı için ilan bul, bir ilanı değerle.', '☰ menü: Kişi ara, Portföy hunisi, kılavuz, çıkış.']],
   ['Puanlar', ['Fırsat puanı 50\'den başlar: fiyat konumu ±25, kullanım, kat, bina yaşı, bölge, yayın süresi, fiyat düşüşü, FSBO +10. Kartta "Neden?"e bas, kalem kalem görürsün.', 'Satıcı derecesi fiyattan ayrı okunur ama emsallerin üstündeki satıcı A+ olamaz.', 'Alıcı uyumu 100 = ilçe 25 + site/mahalle 25 + oda 20 + bütçe 30. Bütçesine uymayan alıcı gösterilmez.']],
   ['Görevler', ['Not kutusuna söyle, sonra Kapat ya da Ertele. "Ulaşılamıyor / vazgeçti" görevi kapatır ve bir daha çıkmaz.']]
 ];
