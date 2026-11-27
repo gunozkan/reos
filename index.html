@@ -299,7 +299,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.27a';
+var SURUM = '2026.11.27b';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -1213,16 +1213,49 @@ function menuKur(){
   document.addEventListener('click', function(e){ if (!m.hidden && !m.contains(e.target) && e.target !== b) m.hidden = true; });
 }
 var KILAVUZ_UYE = [
-  ['Her sabah', ['Uygulama Pano ile açılır: ekibin ne yaptığı, kim cevap verdi, sende geciken var mı orada görünür.', 'Sonra "Takip" sekmesine bak: bugün senden haber bekleyen ilanlar orada.', 'Sonra "Bugün aranacaklar" sekmesine geç: bugün ilk kez temas edeceğin ilanlar orada.']],
-  ['Yeni bir ilan sahibine ilk temas', ['Saat 10:00 ile 19:00 arasıysa büyük yeşil ARA düğmesine bas.', 'Açarsa: kendini tanıt, ilanı sor, ilgileniyorsa "Özkan Bey sizi kısaca arasın, hangi saat uygun?" de.', 'Açmazsa ya da saat uygun değilse "WhatsApp\'ta gönder"e bas. Mesaj hazır gelir, sen sadece gönder\'e basarsın.', 'Telefon kapanınca açılan kutuda ne olduğunu seç (Cevap yok, Ulaşılamadı, Olumlu…), bir cümle ekle, Kaydet.']],
-  ['Altın kural', ['Cevap vermeyen birine ikinci mesaj ATMA. Sıradaki adım her zaman ARAMAK.', 'Sıra: Mesaj → ertesi gün ARA → 2 gün sonra başka saatte ARA → "aradım, ulaşamadım" mesajı → ARA → 30 gün bekle.', 'Uygulama sana her ilan için sıradaki adımı zaten gösterir. Kartta ne yazıyorsa onu yap.']],
-  ['Sahibi olumlu döndüyse', ['Sonucu "Olumlu" ya da "Randevu" diye kaydet. İş kendiliğinden Özkan\'a geçer, o arar.', 'Fiyat, yetki, komisyon konuşma. "Özkan Bey size detaylı bilgi verecek" de.']],
-  ['Sahip "bilgi / özet gönderin" derse', ['Takip\'te o ilanın kartında "Ön RPA gönder"e bas. Rakamsız kısa özet hazırlanır; "WhatsApp\'ta gönder"e basman yeter.', 'Fiyat, değer ya da "kaça satılır" yazma. Özette Özkan Bey\'le 15 dakikalık görüşme daveti var; iş kendiliğinden Özkan\'a geçer, o arar.']],
-  ['Telefon numarası yoksa', ['İlanı aç, numarayı kopyala, karttaki kutuya yapıştır, "Telefonu ekle"ye bas. ARA ve WhatsApp düğmeleri çıkar.', 'Numara hiç yoksa mesajı sahibinden\'den gönder ve "Sahibinden\'den gönderdim"e bas.']],
-  ['Yanlışlıkla bastıysan', ['WhatsApp gönderiminden sonra 15 dakika "Geri al" düğmesi görünür. Ona bas.']],
-  ['Not yazmak yerine konuş', ['Sonuç kutusunda klavyedeki mikrofon simgesine bas ve söyle. Örn: "Aradım, kiracı var, 2 hafta sonra tekrar ara." Sistem "2 hafta sonra"yı anlar ve tarihi kendisi koyar.']],
-  ['Telefon bildirimi', ['iPhone: Safari\'de REOS\'u aç → Paylaş → "Ana Ekrana Ekle". Sonra ana ekrandaki REOS simgesinden aç.', 'Pano\'da "Bildirimleri aç"a bas, izin ver. Sana iş verilince telefonuna bildirim düşer.']],
-  ['Bir şey takıldıysa', ['Sağ üstteki ☰ menüden "Sayfayı yenile"ye bas.', 'Hâlâ olmuyorsa Özkan\'a yaz, ekran görüntüsü at.']]
+  ['1. Uygulamanın sayfaları: hangisi ne işe yarar?', [
+    'PANO: Uygulama burada açılır. Ekibin bugünkü durumunu, cevap verenleri ve sende geciken işleri gösterir. Sadece bakmak içindir.',
+    'BUGÜN ARANACAKLAR: Daha önce HİÇ temas etmediğimiz yeni ilanlar. Burası "yeni iş" listesidir.',
+    'TAKİP: Mesaj attığın ya da aradığın HER ilan buraya geçer ve kapanana kadar burada kalır. Burası "devam eden iş" listesidir.',
+    'Kısacası: yeni ilan Bugün aranacaklar\'da başlar. Sen mesaj atınca ya da arayınca o listeden çıkar ve Takip\'e geçer. Kaybolmaz, yer değiştirir.']],
+  ['2. Bir ilanın yolculuğu (baştan sona)', [
+    'ADIM 1: "Bugün aranacaklar"da ilanı gör. Saat 10:00–19:00 arasıysa yeşil ARA\'ya bas; değilse ya da açmazsa "WhatsApp\'ta gönder"e bas.',
+    'ADIM 2: Mesaj gidince kartta "Gönderildi. Bu ilan artık Takip sekmesinde" yazar. İlan o listeden çıkar.',
+    'ADIM 3: Sahip cevap yazdığında ALTTAKİ TAKİP sekmesine geç.',
+    'ADIM 4: Takip\'in en üstündeki "İlanı bul" kutusuna ilan numarasını yaz (ya da mahalle adını, sahibin adını, telefonun son 4 hanesini). İlan anında çıkar.',
+    'ADIM 5: Kartta "Cevap geldi"ye bas ve sahibin ne dediğini tek cümleyle yaz ya da mikrofonla söyle. Bu adımı ATLAMA: bu yapılmazsa sistem sahibin cevap verdiğini bilmez.',
+    'ADIM 6: Sahip ne istediyse kartta onun düğmesine bas (aşağıdaki durumlara bak).',
+    'ADIM 7: Sahip olumluysa iş Özkan\'a geçer, Özkan arar. Senin işin biter.']],
+  ['3. Sahip "özet / bilgi gönderin" derse (Ön RPA)', [
+    'Takip → "İlanı bul" kutusuna ilan numarasını yaz → kart açılır.',
+    'Kartta "Ön RPA gönder"e bas. Birkaç saniye içinde rakamsız kısa bir özet hazırlanır.',
+    '"WhatsApp\'ta gönder"e bas. Mesaj hazır açılır, sadece gönder\'e bas.',
+    'Özette fiyat yoktur, bilerek. Sahip "kaça satarım?" diye sorarsa: "Bunu Özkan Bey size gerçekleşen satışlarla yüz yüze gösterecek" de. Kendin rakam söyleme.',
+    'Ön RPA\'ya bastığın anda iş Özkan\'ın ekranına da düşer. Ona ayrıca haber vermen gerekmez.']],
+  ['4. Hangi durumda ne yaparsın?', [
+    'Sahip cevap vermedi → Takip\'te kart ne diyorsa onu yap. Genelde: "ARA". İkinci mesaj ATMA.',
+    'Aradın, açmadı → "Sonucu kaydet" → "Ulaşılamadı". Sistem başka bir gün ve saati kendisi ayarlar.',
+    'Sahip "düşüneceğim" dedi → "Sonucu kaydet" → "Düşünecek". Sistem 1 hafta sonraya takip koyar.',
+    'Sahip "emlakçı istemiyorum" dedi → "Sonucu kaydet" → "İstemiyor". Kayıt kapanır.',
+    'Sahip "sattım / kiraladım" dedi → "Sonucu kaydet" → "Sattı".',
+    'Sahip "arayın, görüşelim" dedi → "Sonucu kaydet" → "Olumlu" ya da "Randevu". İş Özkan\'a geçer.',
+    'Sahip "özet gönderin" dedi → 3. bölümdeki Ön RPA adımları.']],
+  ['5. "İlanı bulamıyorum" diyorsan', [
+    'Önce bak: alt menüde "Takip" sekmesinde misin? Bugün aranacaklar\'da aramıyorsun, değil mi?',
+    'Takip\'in en üstündeki "İlanı bul" kutusuna ilan numarasını yaz. Bu kutu bütün kayıtlarda arar; Bugün / Cevap bekleyen ayrımına bakmaz.',
+    'Yine çıkmıyorsa mesajı uygulamadan değil, doğrudan WhatsApp ya da sahibinden\'den göndermişsindir. O zaman kayıt açılmamıştır. "Bugün aranacaklar"da ilanı bul ve "Sahibinden\'den gönderdim"e bas; kayıt açılır.',
+    'Hâlâ yoksa ilan numarasını ve ekran görüntüsünü Özkan\'a gönder.']],
+  ['6. Altın kurallar', [
+    'Cevap vermeyen birine ikinci mesaj atılmaz. Sıradaki adım her zaman ARAMAK.',
+    'Sıra: Mesaj → ertesi gün ARA → 2 gün sonra başka saatte ARA → "aradım, ulaşamadım" mesajı → ARA → 30 gün bekle. Kart sana her seferinde sıradakini söyler.',
+    'Mesajı her zaman uygulamadaki düğmeden gönder. Elle WhatsApp\'tan atarsan sistem bilmez ve ilan kaybolmuş gibi görünür.',
+    'Sahip cevap yazınca MUTLAKA "Cevap geldi"ye bas.',
+    'Fiyat, değer, komisyon, yetki konuşma. Bunlar Özkan\'ın işi.']],
+  ['7. Telefon numarası yoksa', ['İlanı aç, numarayı kopyala, karttaki kutuya yapıştır, "Telefonu ekle"ye bas. ARA ve WhatsApp düğmeleri çıkar.', 'Numara hiç yoksa mesajı sahibinden\'den gönder ve "Sahibinden\'den gönderdim"e bas.']],
+  ['8. Yanlışlıkla bastıysan', ['WhatsApp gönderiminden sonra 15 dakika boyunca "Geri al" düğmesi görünür. Ona bas.']],
+  ['9. Yazmak yerine konuş', ['Not kutusunda klavyedeki mikrofona bas ve söyle. Örnek: "Aradım, kiracı var, 2 hafta sonra tekrar ara." Sistem "2 hafta sonra"yı anlar ve tarihi kendisi koyar.']],
+  ['10. Telefon bildirimi', ['iPhone: Safari\'de REOS\'u aç → Paylaş → "Ana Ekrana Ekle". Sonra ana ekrandaki REOS simgesinden aç.', 'Pano\'da "Bildirimleri aç"a bas, izin ver. Sana iş verilince telefonuna bildirim düşer.']],
+  ['11. Bir şey takıldıysa', ['Sağ üstteki ☰ menüden "Sayfayı yenile"ye bas.', 'Hâlâ olmuyorsa Özkan\'a ilan numarasıyla birlikte ekran görüntüsü at.']]
 ];
 var KILAVUZ_OZKAN = [
   ['Ekranlar', ['Pano (açılış ekranı, ekip de görür): kim kaç ilana mesaj attı, kaçını aradı, kim cevap verdi, sende bekleyenler, kime ne yazıldı. Satıra basınca o ilanın tüm geçmişi açılır.', 'Bugün: canlı piyasa özeti, ekipten devralacakların, takip günü gelenler, görevler, fırsatlar.', 'Bugün aranacaklar: ekibin ilk temas listesi (sen de görürsün).', 'Takip: herkesin temasları. "Kim" listesinden kişi seç; karttaki "İşi ver" ile işi Sevilay\'a, Arzu\'ya ver ya da kendine al.', 'Fırsatlar: alıcı talepleri, "bütçesi yetmedi", "önce evini satacak" gibi takip edilecek fırsatlar ve son 7 günün olayları (ekip de görür).', 'İlan: bir ilanı değerle.', 'Menü (sağ üst): Alıcı çalışması, Kişi ara, Portföy hunisi, kılavuz, çıkış.']],
@@ -1232,7 +1265,7 @@ var KILAVUZ_OZKAN = [
 function kilavuz(){
   var k = uyeMi() ? KILAVUZ_UYE : KILAVUZ_OZKAN;
   view.replaceChildren.apply(view, [sec('Kullanım kılavuzu' + (uyeMi() ? ' (' + AD + ' için)' : ''))].concat(k.map(function(b, i){
-    return h('details', {cls:'card', open: i < 3 ? '' : null}, [h('summary', {text:b[0]}), h('ol', {style:'margin:8px 0 0;padding-left:20px;display:grid;gap:6px'}, b[1].map(function(t){ return h('li', {text:t}); }))]); })));
+    return h('details', {cls:'card', open: i < 5 ? '' : null}, [h('summary', {text:b[0]}), h('ol', {style:'margin:8px 0 0;padding-left:20px;display:grid;gap:6px'}, b[1].map(function(t){ return h('li', {text:t}); }))]); })));
 }
 R.kilavuz = kilavuz;
 window.addEventListener('hashchange', route);
