@@ -131,7 +131,7 @@ header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px
 <div id="menu" hidden></div>
 <main id="view"><div class="spin">Yükleniyor…</div></main>
 <nav id="nav" hidden>
-  <a href="#pano" data-r="ozkan uye">Pano</a><a href="#bugun" data-r="ozkan">Bugün</a><a href="#sevilay" data-r="ozkan uye">Bugün aranacaklar</a><a href="#takip" data-r="ozkan uye">Takip</a><a href="#firsat" data-r="ozkan uye">Fırsatlar</a><a href="#ilan" data-r="ozkan">İlan</a>
+  <a href="#ekip" data-r="ozkan">Ekip</a><a href="#isler" data-r="ozkan uye">İşler</a><a href="#pano" data-r="uye">Pano</a><a href="#firsat" data-r="ozkan">Fırsatlar</a><a href="#ilan" data-r="ozkan">İlan</a>
 </nav>
 
 <dialog id="dlg">
@@ -299,7 +299,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.27c';
+var SURUM = '2026.11.27d';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -1175,17 +1175,170 @@ function girisEkrani(not){
 function cikis(){ sb.auth.signOut().then(function(){ ROL = null; girisEkrani('Çıkış yapıldı.'); }); }
 
 /* ---------- yönlendirme ---------- */
-var R = {pano:pano, bugun:bugun, ilan:ilan, ara:ara, huni:huni, kisi:kisi, sevilay:sevilay, takip:takip, protest:protest, firsat:firsat};
+/* ================= İŞ AKIŞI v3 (27.11.2026) =================
+   Tek kavram: İŞ. Her işin sahibi, durumu ve sıradaki adımı var.
+   İş ekrandan ekrana atlamaz; sadece durumu değişir. Her hareket reos_is ile kaydedilir. */
+var isFiltre = {sekme:'bugun', kim:'hepsi', ara:''};
+var DURUM_RENK = {atandi:'warn', temas:null, cevap:'solid good', liderde:'solid good', randevu:'good', yetki:'good', beklemede:null, kapandi:'bad'};
+
+function isHareket(x, olay, not, ek){
+  var p = {id:x.id, olay:olay, not:not || ''};
+  if (ek) for (var k in ek) p[k] = ek[k];
+  return rpc('reos_is', {p:p});
+}
+
+function neOldu(x, kutu, yenile){
+  /* "Ne oldu?" paneli: duruma uygun seçenekler, tek dokunuş */
+  var not = h('textarea', {placeholder:'Sahip ne dedi? (isteğe bağlı; klavyedeki mikrofonla söyleyebilirsin)', style:'min-height:52px'});
+  var sonuc = h('div', {cls:'m'});
+  var lider = !uyeMi();
+  var secenek = [];
+  if (x.durum === 'liderde' || x.durum === 'randevu') {
+    if (lider) secenek = [['randevu','Randevu alındı','pri'], ['yetki','Yetki alındı','pri'], ['acmadi','Açmadı'], ['dusunecek','Düşünecek'], ['istemiyor','İstemiyor'], ['satti','Sattı']];
+  } else {
+    secenek = [['acmadi','Açmadı / ulaşamadım'], ['konustu','Konuştuk','pri'], ['cevap','Mesaja cevap yazdı','pri'],
+               ['ozet','Özet istedi (Ön RPA)','pri'], ['olumlu','Olumlu: Özkan arasın','pri'], ['dusunecek','Düşünecek'],
+               ['istemiyor','Emlakçı istemiyor'], ['satti','Sattı / kiraladı'], ['yanlis','Yanlış numara'], ['kalkti','İlan kalkmış']];
+  }
+  function bas(olay, btn){
+    [].forEach.call(kutu.querySelectorAll('button'), function(b){ b.disabled = true; });
+    sonuc.textContent = 'Kaydediliyor…';
+    var ek = null;
+    if (olay === 'randevu') { var t = prompt('Randevu tarihi (GG.AA)?', ''); if (t) { var m = /(\d{1,2})[.\/](\d{1,2})/.exec(t); if (m) ek = {tarih: new Date().getFullYear() + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2)}; } }
+    isHareket(x, olay, not.value.trim(), ek).then(function(r){
+      if (!r.ok) { sonuc.textContent = r.neden || 'Kaydedilemedi'; [].forEach.call(kutu.querySelectorAll('button'), function(b){ b.disabled = false; }); return; }
+      if (olay === 'ozet' && r.metin) { ozetGoster(kutu, r); return; }
+      sonuc.textContent = 'Kaydedildi: ' + (r.kart ? r.kart.durum_ad : r.durum) + (r.sonraki ? ' · sıradaki: ' + r.sonraki.ad : '') + (r.takip ? ' (' + fmtDate(r.takip) + ')' : '');
+      setTimeout(yenile, 900);
+    }).catch(function(e){ sonuc.textContent = e.message; [].forEach.call(kutu.querySelectorAll('button'), function(b){ b.disabled = false; }); });
+  }
+  kutu.replaceChildren(h('div', {cls:'card hot', style:'display:grid;gap:8px'}, [
+    h('div', {cls:'t', text:'Ne oldu?'}), not,
+    h('div', {cls:'acts'}, secenek.map(function(s){ var b = h('button', {cls:s[2] || '', text:s[1]}); b.addEventListener('click', function(){ bas(s[0], b); }); return b; })),
+    h('button', {text:'Vazgeç', onclick:function(){ kutu.replaceChildren(); }}), sonuc]));
+}
+
+function ozetGoster(kutu, r){
+  var cp = h('button', {text:'Özeti kopyala'}); cp.addEventListener('click', function(){ kopyala(r.metin, cp); });
+  kutu.replaceChildren(h('div', {cls:'card hot', style:'display:grid;gap:8px'}, [
+    h('div', {cls:'t', text:'Ön RPA hazır: mal sahibine gönder'}),
+    h('div', {cls:'msgbox', text:r.metin}),
+    h('div', {cls:'acts'}, [r.tel ? h('a', {cls:'btn pri', href:waLink(r.tel, r.metin), target:'_blank', rel:'noopener', text:'WhatsApp\'ta gönder'}) : null, cp]),
+    h('div', {cls:'m', text:'Fiyat ve satış tablosu yazılı verilmez; Özkan yüz yüze gösterir. İş Özkan\'a geçti: bugün arayacak.'})]));
+}
+
+function isKart(x, yenile){
+  var kod = (x.sonraki || {}).kod, kutu = h('div'), lider = !uyeMi();
+  var baslik = [mah(x.mahalle), x.site, x.oda, x.m2 ? x.m2 + ' m²' : ''].filter(Boolean).join(' · ') || ('Kayıt ' + x.id);
+  var gec = x.gecikme > 0 && ['temas','beklemede','liderde'].indexOf(x.durum) >= 0;
+  var bilgi = {mahalle:x.mahalle, site:x.site, oda:x.oda, tur:x.tur, emlakci_istemez:x.emlakci_istemez, eski_fiyat:(x.ilk_fiyat && x.fiyat < x.ilk_fiyat) ? x.ilk_fiyat : null};
+  var ana = [];
+  function araBtn(){ if (!x.tel) return null; var a = h('a', {cls:'btn ara', href:'tel:+90' + digits(x.tel), text:'ARA'}); a.addEventListener('click', function(){ setTimeout(function(){ neOldu(x, kutu, yenile); }, 900); }); return a; }
+  function mesajBtn(metin, etiket){ if (!x.tel || !metin) return null; var a = h('a', {cls:'btn' + (ana.length ? '' : ' pri'), href:waLink(x.tel, metin), target:'_blank', rel:'noopener', text:etiket || 'Mesajı WhatsApp\'ta gönder'});
+    a.addEventListener('click', function(){ isHareket(x, 'mesaj', '').then(function(r){ kutu.replaceChildren(h('div', {cls:'msg', text:'Mesaj kaydedildi. Sıradaki: ' + ((r.sonraki || {}).ad || '') + (r.takip ? ' (' + fmtDate(r.takip) + ')' : '') + '. Cevap gelirse bu kartta "Ne oldu?"ya bas.'})); setTimeout(yenile, 2500); }); }); return a; }
+  if (kod === 'ilk') { var saat = new Date().getHours(); if (saat >= 10 && saat < 19) ana.push(araBtn()); ana.push(mesajBtn(fsboMesaj(bilgi), 'İlk mesajı WhatsApp\'ta gönder')); }
+  else if (kod === 'ara' || kod === 'lider_ara') { ana.push(araBtn()); }
+  else if (kod === 'ulasamadim') { ana.push(mesajBtn(takipMesaj({adim:'ulasamadim', tur:x.tur, mahalle:x.mahalle, site:x.site, oda:x.oda}), '"Ulaşamadım" mesajını gönder')); ana.push(araBtn()); }
+  else if (kod === 'bekle') { var bb = h('button', {cls:'pri', text:'30 gün beklemeye al'}); bb.addEventListener('click', function(){ bb.disabled = true; isHareket(x, 'bekle', '5 denemede ulaşılamadı').then(yenile); }); ana.push(bb); }
+  else if (kod === 'isaretle') { /* doğrudan Ne oldu paneli açık gelsin */ }
+  ana = ana.filter(Boolean);
+  var noBtn = h('button', {text:'Ne oldu?', cls:kod === 'isaretle' ? 'pri' : ''}); noBtn.addEventListener('click', function(){ neOldu(x, kutu, yenile); });
+  var ust = [lider ? chip('Sahibi: ' + (x.sahip || '?'), x.sahip === 'Özkan' ? 'solid good' : 'solid') : null,
+    chip(x.durum_ad, DURUM_RENK[x.durum]), x.deneme ? chip(x.deneme + '. deneme') : null,
+    x.takip && x.durum !== 'kapandi' ? chip((gec ? 'gecikti ' : (x.gecikme === 0 ? 'bugün ' : '')) + fmtDate(x.takip), gec ? 'bad' : (x.gecikme === 0 ? 'warn' : null)) : null,
+    x.yayinda === false ? chip('İLAN KALKTI', 'solid bad') : null, bilgi.eski_fiyat ? chip('fiyatı düştü', 'warn') : null];
+  var kids = [
+    h('div', {cls:'row'}, ust),
+    h('div', {cls:'t', text:baslik}),
+    h('div', {cls:'price', style:'font-size:14px', text:(x.fiyat ? tl(x.fiyat) : '') + (bilgi.eski_fiyat ? ' (önce ' + tl(x.ilk_fiyat) + ')' : '') + (x.gun != null ? ' · ' + x.gun + ' gündür yayında' : '')}),
+    x.sahip_dedi ? h('div', {cls:'m', text:'Sahip dedi: ' + x.sahip_dedi}) : null,
+    x.son ? h('div', {cls:'m', text:'Son temas: ' + x.son + (x.kanal ? ' (' + x.kanal + ')' : '')}) : null,
+    x.kapanis ? h('div', {cls:'m', text:'Kapanış: ' + x.kapanis}) : null,
+    h('div', {style:'font-weight:700', text:'Sıradaki: ' + ((x.sonraki || {}).ad || '-') + (x.beklenen ? ' → ' + (x.beklenen === AD ? 'SEN' : x.beklenen) : '')}),
+    !x.tel && x.durum !== 'kapandi' ? h('div', {cls:'m', style:'color:var(--warn)', text:'Telefon yok: ilanı aç, numarayı al, aşağıya ekle.'}) : null,
+    !x.tel && x.durum !== 'kapandi' ? telEkle(x.id, yenile) : null,
+    ana.length || x.durum !== 'kapandi' ? h('div', {cls:'acts'}, ana.concat([x.durum === 'kapandi' ? null : noBtn])) : null,
+    kutu,
+    h('div', {cls:'acts', style:'opacity:.9'}, [link(x.url), noKopya(x.no), lider && x.no ? h('button', {text:'Değerle', onclick:function(){ goIlan(x.no); }}) : null,
+      lider ? ataSec(x.id, x.sahip, x.no, baslik, kutu, yenile) : null,
+      x.durum === 'kapandi' || x.durum === 'beklemede' ? h('button', {text:'Yeniden aç', onclick:function(e){ e.target.disabled = true; isHareket(x, 'tekrar', '').then(yenile); }}) : null]),
+    gecmisPanel(x.id, 'Geçmiş')];
+  var c = h('div', {cls:'card' + (x.durum === 'cevap' || x.durum === 'liderde' ? ' hot' : '')}, kids.filter(Boolean));
+  if (kod === 'isaretle') setTimeout(function(){ neOldu(x, kutu, yenile); }, 0);
+  return c;
+}
+
+function isler(){
+  loading('İşler getiriliyor…');
+  rpc('reos_islerim', {p:isFiltre}).then(function(d){
+    var say = d.say || {}, lider = d.rol === 'ozkan';
+    function sek(v, t){ return h('button', {'aria-pressed':String(isFiltre.sekme === v && !isFiltre.ara), text:t, onclick:function(){ isFiltre.sekme = v; isFiltre.ara = ''; isler(); }}); }
+    var araInp = h('input', {type:'search', id:'isAra', autocomplete:'off', placeholder:'İlan no, mahalle, isim ya da telefonun son 4 hanesi', value:isFiltre.ara});
+    var z = null;
+    araInp.addEventListener('input', function(){ clearTimeout(z); z = setTimeout(function(){ isFiltre.ara = araInp.value.trim(); isler(); setTimeout(function(){ var e = document.getElementById('isAra'); if (e) { e.focus(); e.setSelectionRange(e.value.length, e.value.length); } }, 60); }, 450); });
+    var out = [
+      sec(lider ? 'İşler' : 'İşlerim', null, 'Sana atanan her ilan burada, bitene kadar burada kalır. "Bugün": bugün yapman gerekenler. "Bekleyen": cevabını ya da tarihini beklediklerin. "Biten": kapananlar. Ne olursa olsun kartta "Ne oldu?"ya basıp işaretle; gerisini sistem ayarlar.'),
+      h('label', {'for':'isAra', style:'font-weight:700'}, ['İlanı bul', araInp]),
+      h('div', {cls:'seg'}, [sek('bugun', 'Bugün (' + (say.bugun || 0) + ')'), sek('bekleyen', 'Bekleyen (' + (say.bekleyen || 0) + ')'), sek('biten', 'Biten (' + (say.biten || 0) + ')')]),
+      lider ? h('label', {'for':'isKim'}, ['Kimin işleri', (function(){ var s = h('select', {id:'isKim'}, [h('option', {value:'hepsi', text:'Herkes'})].concat(EKIP.map(function(e){ return h('option', {value:e.ad, text:e.ad === 'Özkan' ? 'Bende olanlar' : e.ad}); })));
+        s.value = isFiltre.kim; s.addEventListener('change', function(){ isFiltre.kim = s.value; isler(); }); return s; })()]) : null,
+      h('div', {cls:'m', text:'Bugün ' + (say.bugun_yapilan || 0) + ' hareket kaydedildi' + (say.cevap ? ' · ' + say.cevap + ' cevap işaretlenmeyi bekliyor' : '') + (d.yeni_atanan ? ' · bugün sana ' + d.yeni_atanan + ' yeni ilan atandı' : '') + '.'})];
+    if (isFiltre.ara) out.push(h('div', {cls:'row'}, [chip('"' + isFiltre.ara + '": ' + d.rows.length + ' sonuç (tüm işlerde)'), h('button', {text:'Aramayı temizle', onclick:function(){ isFiltre.ara = ''; isler(); }})]));
+    if (!d.rows.length) out.push(empty(isFiltre.ara ? 'Bu aramayla iş yok. İlan numarasını kontrol et.' : (isFiltre.sekme === 'bugun' ? 'Bugün yapılacak iş kalmadı.' : 'Burada iş yok.')));
+    d.rows.forEach(function(x){ out.push(isKart(x, isler)); });
+    view.replaceChildren.apply(view, out.filter(Boolean));
+  }).catch(fail);
+}
+
+function ekip(){
+  loading('Ekip getiriliyor…');
+  rpc('reos_ekip_ozet', {}).then(function(d){
+    var out = [sec('Ekip', null, 'Her kişinin bugünkü durumu. Bir kişiye dokun: onun işleri açılır. "Bende" bölümü: sahip olumlu döndü ya da özet istedi; arayıp randevu alman gerekenler.')];
+    (d.kisiler || []).forEach(function(k){
+      out.push(h('button', {cls:'card', style:'text-align:left;display:grid;gap:4px;width:100%', onclick:function(){ isFiltre = {sekme:'bugun', kim:k.ad, ara:''}; location.hash = '#isler'; }}, [
+        h('div', {cls:'t', text:k.ad + ' · ' + ({asistan:'asistan', danisman:'danışman'}[k.rol] || k.rol)}),
+        h('div', {cls:'row'}, [chip('bugün yapılacak ' + k.yapilacak, k.yapilacak ? 'warn' : null), chip('bugün yaptı ' + k.bugun_yapilan, k.bugun_yapilan ? 'good' : null),
+          chip('cevap bekliyor ' + k.cevap_bekliyor), k.geciken ? chip('geciken ' + k.geciken, 'bad') : null])]));
+    });
+    out.push(sec('Bende: aranacak', (d.bende || []).length, 'Ekipten gelen sıcak işler. Ara, 15 dakikalık randevu al, "Ne oldu?"dan işaretle.'));
+    if (!(d.bende || []).length) out.push(empty('Şu an sende bekleyen iş yok.'));
+    (d.bende || []).forEach(function(x){ out.push(isKart(x, ekip)); });
+    out.push(sec('Atama kuralları', null, 'Yeni ilan geldiğinde kime atanacağını belirler. Mahalle kuralı ilçe kuralından önce gelir. Tek tek ilanı kartta "İşi ver" ile de değiştirebilirsin.'));
+    out.push(kuralKutusu(d.kurallar || []));
+    if (+d.eski_adaylar) out.push(h('div', {cls:'msg', text:'Sende eski sistemden kalan ' + d.eski_adaylar + ' aday kayıt var (hiç temas edilmemiş). Ne yapılacağına karar ver: kurala göre ekibe dağıtılsın mı, kapansın mı? Claude\'a söylemen yeterli.'}));
+    view.replaceChildren.apply(view, out.filter(Boolean));
+  }).catch(fail);
+}
+
+function kuralKutusu(kurallar){
+  var kutu = h('div', {style:'display:grid;gap:6px'});
+  function ciz(list){
+    var satirlar = list.map(function(k){
+      var sil = h('button', {text:'Sil'}); sil.addEventListener('click', function(){ if (!confirm('Bu kural silinsin mi?')) return; rpc('reos_kural', {p:{id:k.id, sil:true}}).then(function(r){ ciz(r.kurallar || []); }); });
+      return h('div', {cls:'row', style:'align-items:center;gap:8px'}, [h('span', {text:(k.mahalle ? k.mahalle + ' (' + (k.ilce || '') + ')' : (k.ilce || 'Her yer')) + ' → '}), h('b', {text:k.kime}), k.aktif ? null : chip('kapalı', 'bad'), sil]);
+    });
+    var ilce = h('select', null, ['Ataşehir', 'Ümraniye', 'Kadıköy'].map(function(i){ return h('option', {value:i, text:i}); }));
+    var mahI = h('input', {placeholder:'Mahalle (boş = tüm ilçe)'});
+    var kime = h('select', null, EKIP.filter(function(e){ return e.ad !== 'Özkan'; }).map(function(e){ return h('option', {value:e.ad, text:e.ad}); }));
+    var ekle = h('button', {cls:'pri', text:'Kural ekle'});
+    ekle.addEventListener('click', function(){ ekle.disabled = true; rpc('reos_kural', {p:{ilce:ilce.value, mahalle:mahI.value.trim(), kime:kime.value}}).then(function(r){ ciz(r.kurallar || []); }); });
+    kutu.replaceChildren.apply(kutu, satirlar.concat([h('div', {cls:'acts'}, [ilce, mahI, kime, ekle])]));
+  }
+  ciz(kurallar);
+  return h('div', {cls:'card'}, [kutu]);
+}
+
+var R = {pano:pano, bugun:bugun, ilan:ilan, ara:ara, huni:huni, kisi:kisi, sevilay:isler, takip:isler, isler:isler, ekip:ekip, protest:protest, firsat:firsat};
 function route(){
   if (!ROL) return;
-  var def = 'pano';
+  var def = uyeMi() ? 'isler' : 'ekip';
   document.getElementById('menu').hidden = true;
   var k = (location.hash || '#' + def).slice(1);
-  if (!R[k] || (uyeMi() && ['pano','sevilay','takip','kilavuz','firsat'].indexOf(k) < 0)) k = def;
+  if (!R[k] || (uyeMi() && ['pano','isler','sevilay','takip','kilavuz','firsat'].indexOf(k) < 0)) k = def;
   var mb = document.getElementById('menuBtn'); if (mb) mb.setAttribute('aria-expanded', 'false');
   [].forEach.call(document.querySelectorAll('nav a'), function(a){
     a.hidden = (a.getAttribute('data-r') || '').split(' ').indexOf(ROL) < 0;
-    if (a.getAttribute('href') === '#' + k) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    if (a.getAttribute('href') === '#' + (k === 'takip' || k === 'sevilay' ? 'isler' : k)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   R[k]();
 }
 function basla(){
@@ -1204,7 +1357,7 @@ function basla(){
 }
 function menuKur(){
   var m = document.getElementById('menu'), b = document.getElementById('menuBtn');
-  var items = [['grp', 'Çalışma'], ROL === 'ozkan' ? ['#ara', 'Alıcı çalışması (alıcıya ilan bul)'] : null, ['#firsat', 'Fırsatlar'], ROL === 'ozkan' ? ['#kisi', 'Kişi ara'] : null, ROL === 'ozkan' ? ['#huni', 'Portföy hunisi'] : null,
+  var items = [['grp', 'Çalışma'], ['#pano', 'Pano (ekip akışı)'], ROL === 'ozkan' ? ['#bugun', 'Günün özeti (piyasa, görevler, fırsat olayları)'] : null, ROL === 'ozkan' ? ['#ara', 'Alıcı çalışması (alıcıya ilan bul)'] : null, ['#firsat', 'Fırsatlar'], ROL === 'ozkan' ? ['#kisi', 'Kişi ara'] : null, ROL === 'ozkan' ? ['#huni', 'Portföy hunisi'] : null,
     ['grp', 'Yardım'], ['#kilavuz', 'Kullanım kılavuzu'], ROL === 'ozkan' ? ['#protest', 'sahibinden Pro testi'] : null, ['grp', 'Hesap']].filter(Boolean);
   m.replaceChildren.apply(m, items.map(function(x){ return x[0] === 'grp' ? h('div', {cls:'grp', text:x[1]}) : h('a', {href:x[0], text:x[1]}); }).concat([
     h('a', {href:'#', text:'Sayfayı yenile', onclick:function(e){ e.preventDefault(); location.reload(); }}),
@@ -1214,59 +1367,38 @@ function menuKur(){
   document.addEventListener('click', function(e){ if (!m.hidden && !m.contains(e.target) && e.target !== b) m.hidden = true; });
 }
 var KILAVUZ_UYE = [
-  ['1. Uygulamanın sayfaları: hangisi ne işe yarar?', [
-    'PANO: Uygulama burada açılır. Ekibin bugünkü durumunu, cevap verenleri ve sende geciken işleri gösterir. Sadece bakmak içindir.',
-    'BUGÜN ARANACAKLAR: Daha önce HİÇ temas etmediğimiz yeni ilanlar. Burası "yeni iş" listesidir.',
-    'TAKİP: Mesaj attığın ya da aradığın HER ilan buraya geçer ve kapanana kadar burada kalır. Burası "devam eden iş" listesidir.',
-    'Kısacası: yeni ilan Bugün aranacaklar\'da başlar. Sen mesaj atınca ya da arayınca o listeden çıkar ve Takip\'e geçer. Kaybolmaz, yer değiştirir.']],
-  ['2. Bir ilanın yolculuğu (baştan sona)', [
-    'ADIM 1: "Bugün aranacaklar"da ilanı gör. Saat 10:00–19:00 arasıysa yeşil ARA\'ya bas; değilse ya da açmazsa "WhatsApp\'ta gönder"e bas.',
-    'ADIM 2: Mesaj gidince kartta "Gönderildi. Bu ilan artık Takip sekmesinde" yazar. İlan o listeden çıkar.',
-    'ADIM 3: Sahip cevap yazdığında ALTTAKİ TAKİP sekmesine geç.',
-    'ADIM 4: Takip\'in en üstündeki "İlanı bul" kutusuna ilan numarasını yaz (ya da mahalle adını, sahibin adını, telefonun son 4 hanesini). İlan anında çıkar.',
-    'ADIM 5: Kartta "Cevap geldi"ye bas ve sahibin ne dediğini tek cümleyle yaz ya da mikrofonla söyle. Bu adımı ATLAMA: bu yapılmazsa sistem sahibin cevap verdiğini bilmez.',
-    'ADIM 6: Sahip ne istediyse kartta onun düğmesine bas (aşağıdaki durumlara bak).',
-    'ADIM 7: Sahip olumluysa iş Özkan\'a geçer, Özkan arar. Senin işin biter.']],
-  ['3. Sahip "özet / bilgi gönderin" derse (Ön RPA)', [
-    'Takip → "İlanı bul" kutusuna ilan numarasını yaz → kart açılır.',
-    'Kartta "Ön RPA gönder"e bas. Birkaç saniye içinde rakamsız kısa bir özet hazırlanır.',
-    '"WhatsApp\'ta gönder"e bas. Mesaj hazır açılır, sadece gönder\'e bas.',
-    'Özette fiyat yoktur, bilerek. Sahip "kaça satarım?" diye sorarsa: "Bunu Özkan Bey size gerçekleşen satışlarla yüz yüze gösterecek" de. Kendin rakam söyleme.',
-    'Ön RPA\'ya bastığın anda iş Özkan\'ın ekranına da düşer. Ona ayrıca haber vermen gerekmez.']],
-  ['4. Hangi durumda ne yaparsın?', [
-    'Sahip cevap vermedi → Takip\'te kart ne diyorsa onu yap. Genelde: "ARA". İkinci mesaj ATMA.',
-    'Aradın, açmadı → "Sonucu kaydet" → "Ulaşılamadı". Sistem başka bir gün ve saati kendisi ayarlar.',
-    'Sahip "düşüneceğim" dedi → "Sonucu kaydet" → "Düşünecek". Sistem 1 hafta sonraya takip koyar.',
-    'Sahip "emlakçı istemiyorum" dedi → "Sonucu kaydet" → "İstemiyor". Kayıt kapanır.',
-    'Sahip "sattım / kiraladım" dedi → "Sonucu kaydet" → "Sattı".',
-    'Sahip "arayın, görüşelim" dedi → "Sonucu kaydet" → "Olumlu" ya da "Randevu". İş Özkan\'a geçer.',
-    'Sahip "özet gönderin" dedi → 3. bölümdeki Ön RPA adımları.']],
-  ['5. "İlanı bulamıyorum" diyorsan', [
-    'Önce bak: alt menüde "Takip" sekmesinde misin? Bugün aranacaklar\'da aramıyorsun, değil mi?',
-    'Takip\'in en üstündeki "İlanı bul" kutusuna ilan numarasını yaz. Bu kutu bütün kayıtlarda arar; Bugün / Cevap bekleyen ayrımına bakmaz.',
-    'Yine çıkmıyorsa mesajı uygulamadan değil, doğrudan WhatsApp ya da sahibinden\'den göndermişsindir. O zaman kayıt açılmamıştır. "Bugün aranacaklar"da ilanı bul ve "Sahibinden\'den gönderdim"e bas; kayıt açılır.',
-    'Hâlâ yoksa ilan numarasını ve ekran görüntüsünü Özkan\'a gönder.']],
-  ['6. Altın kurallar', [
-    'Cevap vermeyen birine ikinci mesaj atılmaz. Sıradaki adım her zaman ARAMAK.',
-    'Sıra: Mesaj → ertesi gün ARA → 2 gün sonra başka saatte ARA → "aradım, ulaşamadım" mesajı → ARA → 30 gün bekle. Kart sana her seferinde sıradakini söyler.',
-    'Mesajı her zaman uygulamadaki düğmeden gönder. Elle WhatsApp\'tan atarsan sistem bilmez ve ilan kaybolmuş gibi görünür.',
-    'Sahip cevap yazınca MUTLAKA "Cevap geldi"ye bas.',
-    'Fiyat, değer, komisyon, yetki konuşma. Bunlar Özkan\'ın işi.']],
-  ['7. Telefon numarası yoksa', ['İlanı aç, numarayı kopyala, karttaki kutuya yapıştır, "Telefonu ekle"ye bas. ARA ve WhatsApp düğmeleri çıkar.', 'Numara hiç yoksa mesajı sahibinden\'den gönder ve "Sahibinden\'den gönderdim"e bas.']],
-  ['8. Yanlışlıkla bastıysan', ['WhatsApp gönderiminden sonra 15 dakika boyunca "Geri al" düğmesi görünür. Ona bas.']],
-  ['9. Yazmak yerine konuş', ['Not kutusunda klavyedeki mikrofona bas ve söyle. Örnek: "Aradım, kiracı var, 2 hafta sonra tekrar ara." Sistem "2 hafta sonra"yı anlar ve tarihi kendisi koyar.']],
-  ['10. Telefon bildirimi', ['iPhone: Safari\'de REOS\'u aç → Paylaş → "Ana Ekrana Ekle". Sonra ana ekrandaki REOS simgesinden aç.', 'Pano\'da "Bildirimleri aç"a bas, izin ver. Sana iş verilince telefonuna bildirim düşer.']],
-  ['11. Bir şey takıldıysa', ['Sağ üstteki ☰ menüden "Sayfayı yenile"ye bas.', 'Hâlâ olmuyorsa Özkan\'a ilan numarasıyla birlikte ekran görüntüsü at.']]
+  ['Tek kural: her şey "İşlerim"de', [
+    'Sana atanan her ilan "İşlerim" sayfasındadır ve bitene kadar orada kalır. Başka bir sayfaya gitmez, kaybolmaz.',
+    'Üç sekme var. BUGÜN: bugün yapman gerekenler. BEKLEYEN: cevabını ya da tarihini beklediklerin. BİTEN: kapananlar.',
+    'Bir ilanı mı arıyorsun? En üstteki "İlanı bul" kutusuna ilan numarasını, mahalleyi ya da telefonun son 4 hanesini yaz. Bütün işlerinde arar.']],
+  ['Her kartta ne yaparım?', [
+    'Kartta kalın yazıyla "Sıradaki:" satırı var. Ne yazıyorsa onu yap. Düğmesi hemen altında.',
+    'İlk temas: Saat 10:00–19:00 arasıysa yeşil ARA\'ya bas. Açmazsa "İlk mesajı WhatsApp\'ta gönder"e bas. Mesaj hazır gelir, sen sadece gönder\'e basarsın. Sistem mesajı kendisi kaydeder.',
+    'Sıradaki "ARA" ise ara. İkinci mesaj atılmaz.',
+    'Aradıktan sonra ya da sahip mesajına cevap yazınca "Ne oldu?"ya bas ve olanı seç. Hepsi bu.']],
+  ['"Ne oldu?" seçenekleri', [
+    'Açmadı / ulaşamadım: Sistem bir sonraki aramayı başka bir gün ve saate kendisi koyar.',
+    'Konuştuk ya da Mesaja cevap yazdı: Ardından sahibin ne dediğini seç.',
+    'Özet istedi (Ön RPA): Rakamsız özet hazırlanır, "WhatsApp\'ta gönder"e basarsın. İş Özkan\'a geçer, o arar.',
+    'Olumlu: Özkan arasın. İş Özkan\'a geçer, senin işin biter.',
+    'Düşünecek: 1 hafta sonra tekrar karşına çıkar. Not kutusuna "2 hafta sonra" yazarsan o tarihe atar.',
+    'Emlakçı istemiyor, Sattı, Yanlış numara, İlan kalkmış: İş kapanır.',
+    'Not kutusuna sahibin ne dediğini bir cümleyle yaz ya da mikrofonla söyle. Özkan bunu görür.']],
+  ['Yapma', [
+    'Mesajı WhatsApp\'tan elle atma, kartın içindeki düğmeyi kullan. Elle atarsan sistem bilmez.',
+    'Fiyat, değer, komisyon, yetki konuşma. Sahip sorarsa: "Özkan Bey size gerçekleşen satışlarla yüz yüze anlatacak."']],
+  ['Telefon numarası yoksa', ['Kartta "İlanı aç"a bas, numarayı al, karttaki kutuya yaz ve "Telefonu ekle"ye bas. Düğmeler açılır.']],
+  ['Bir şey takıldıysa', ['Sağ üstteki ☰ menüden "Sayfayı yenile"ye bas. Olmazsa Özkan\'a ilan numarasıyla birlikte ekran görüntüsü at.']]
 ];
 var KILAVUZ_OZKAN = [
-  ['Ekranlar', ['Pano (açılış ekranı, ekip de görür): kim kaç ilana mesaj attı, kaçını aradı, kim cevap verdi, sende bekleyenler, kime ne yazıldı. Satıra basınca o ilanın tüm geçmişi açılır.', 'Bugün: canlı piyasa özeti, ekipten devralacakların, takip günü gelenler, görevler, fırsatlar.', 'Bugün aranacaklar: ekibin ilk temas listesi (sen de görürsün).', 'Takip: herkesin temasları. "Kim" listesinden kişi seç; karttaki "İşi ver" ile işi Sevilay\'a, Arzu\'ya ver ya da kendine al.', 'Fırsatlar: alıcı talepleri, "bütçesi yetmedi", "önce evini satacak" gibi takip edilecek fırsatlar ve son 7 günün olayları (ekip de görür).', 'İlan: bir ilanı değerle.', 'Menü (sağ üst): Alıcı çalışması, Kişi ara, Portföy hunisi, kılavuz, çıkış.']],
+  ['Ekranlar', ['EKİP (açılış): her kişinin bugün yapacağı, bugün yaptığı, geciken işleri. Kişiye dokun, işleri açılır. Altta "Bende: aranacak" (olumlu dönen ve özet isteyenler) ve atama kuralları.', 'İŞLER: bütün işler. "Kimin işleri" listesinden kişi seç. Kartta "İşi ver" ile işi başkasına ver ya da kendine al.', 'Durumlar: Atandı → Temas edildi → Cevap geldi → Özkan\'da → Randevu → Yetki alındı. Beklemede (30 gün) ve Kapandı da var. Her durumda kimden ne beklendiği kartta "Sıradaki" satırında yazar.', 'Atama kuralı: Ataşehir → Arzu, Ümraniye → Sevilay. Ekip ekranının altından değiştirilir. Yeni ilanlar kuralla otomatik atanır, sana FSBO düşmez.', 'Fırsatlar ve İlan: değişmedi. ☰ menü: Pano, Günün özeti, Alıcı çalışması, Kişi ara, Portföy hunisi.']],
   ['Puanlar', ['Fırsat puanı 50\'den başlar: fiyat konumu ±25, kullanım, kat, bina yaşı, bölge, yayın süresi, fiyat düşüşü, FSBO +10. Kartta "Neden?"e bas, kalem kalem görürsün.', 'Satıcı derecesi fiyattan ayrı okunur ama emsallerin üstündeki satıcı A+ olamaz.', 'Alıcı uyumu 100 = ilçe 25 + site/mahalle 25 + oda 20 + bütçe 30. Bütçesine uymayan alıcı gösterilmez.']],
   ['Görevler', ['Not kutusuna söyle, sonra Kapat ya da Ertele. "Ulaşılamıyor / vazgeçti" görevi kapatır ve bir daha çıkmaz.']]
 ];
 function kilavuz(){
   var k = uyeMi() ? KILAVUZ_UYE : KILAVUZ_OZKAN;
   view.replaceChildren.apply(view, [sec('Kullanım kılavuzu' + (uyeMi() ? ' (' + AD + ' için)' : ''))].concat(k.map(function(b, i){
-    return h('details', {cls:'card', open: i < 5 ? '' : null}, [h('summary', {text:b[0]}), h('ol', {style:'margin:8px 0 0;padding-left:20px;display:grid;gap:6px'}, b[1].map(function(t){ return h('li', {text:t}); }))]); })));
+    return h('details', {cls:'card', open: i < 4 ? '' : null}, [h('summary', {text:b[0]}), h('ol', {style:'margin:8px 0 0;padding-left:20px;display:grid;gap:6px'}, b[1].map(function(t){ return h('li', {text:t}); }))]); })));
 }
 R.kilavuz = kilavuz;
 window.addEventListener('hashchange', route);
