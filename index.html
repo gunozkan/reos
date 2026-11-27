@@ -299,7 +299,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.27b';
+var SURUM = '2026.11.27c';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -856,6 +856,7 @@ function takip(){
       if (wa) wa.addEventListener('click', function(){ rpc('reos_kaydet', {p:{ref:ref, summary:'WhatsApp\'tan takip mesajı (' + (ADIM[adim] || [adim])[0] + ')', channel:'whatsapp', tur:adim === 'ulasamadim' ? 'ulasamadim_mesaj' : 'ikinci_mesaj'}}).then(function(){ slot.replaceChildren(geriAlKutusu(ref)); }); });
       var ata = ataSec(x.id, x.kim, x.no, [mah(x.mahalle), x.oda].filter(Boolean).join(' ') || x.baslik);
       kids.push(h('div', {cls:'acts'}, [araBtn, waSohbet, wa, araBtn || wa ? null : telLinks(x.tel), link(x.url), noKopya(x.no), cp,
+        x.cevap ? null : h('button', {cls:'pri', text:'Cevap geldi', onclick:function(){ kaydetAc(ref, [mah(x.mahalle), x.oda].join(' ') || x.baslik, x.tel, x.ad, 'cevap'); }}),
         h('button', {cls:(wa || araBtn) ? '' : 'pri', text:'Sonucu kaydet', onclick:function(){ kaydetAc(ref, [mah(x.mahalle), x.oda].join(' ') || x.baslik, x.tel, x.ad, x.cevap ? '' : (aramaAdimi ? adim : '')); }}),
         adim === 'birak' && !x.cevap ? kayitBtn('30 gün beklemeye al', ref, {summary:'5 denemede ulaşılamadı, 30 gün beklemede', tur:'birak'}, takip) : null, ata]));
       var ozBtn = h('button', {text:'Ön RPA gönder'});
