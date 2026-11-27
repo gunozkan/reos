@@ -299,7 +299,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.26j';
+var SURUM = '2026.11.27a';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -818,13 +818,18 @@ function takip(){
   rpc('reos_takip', {p:takipFiltre}).then(function(d){
     var say = d.say || {}; takipFiyat = {};
     function segBtn(grup, val, text){ return h('button', {'aria-pressed':String(takipFiltre[grup] === val), text:text, onclick:function(){ takipFiltre[grup] = val; takip(); }}); }
-    var out = [sec('FSBO takip', null, 'Temas edilen her ilan burada. Sıra: önce cevap verenler, sonra takip günü gelenler. Kural: cevapsız mesajdan sonra ikinci mesaj yok, ARA. Mesaj → ARA → başka saatte ARA → "ulaşamadım" mesajı → ARA → 30 gün bekle.'),
+    var araInp = h('input', {type:'search', id:'takipAra', autocomplete:'off', placeholder:'İlan no, mahalle, site, isim ya da telefon', value:takipFiltre.ara || ''});
+    var araZ = null;
+    araInp.addEventListener('input', function(){ clearTimeout(araZ); araZ = setTimeout(function(){ takipFiltre.ara = araInp.value.trim(); takip(); setTimeout(function(){ var e = document.getElementById('takipAra'); if (e) { e.focus(); e.setSelectionRange(e.value.length, e.value.length); } }, 50); }, 400); });
+    var out = [h('label', {'for':'takipAra', style:'font-weight:700'}, ['İlanı bul (mesaj attığın her ilan burada)', araInp]),
+      takipFiltre.ara ? h('div', {cls:'row'}, [chip('"' + takipFiltre.ara + '" için ' + d.rows.length + ' sonuç (tüm kayıtlarda)'), h('button', {text:'Aramayı temizle', onclick:function(){ takipFiltre.ara = ''; takip(); }})]) : null,
+      sec('FSBO takip', null, 'Temas edilen her ilan burada. Sıra: önce cevap verenler, sonra takip günü gelenler. Kural: cevapsız mesajdan sonra ikinci mesaj yok, ARA. Mesaj → ARA → başka saatte ARA → "ulaşamadım" mesajı → ARA → 30 gün bekle.'),
       h('div', {cls:'seg'}, [segBtn('durum','bugun','Bugün (' + (say.bugun || 0) + ')'), segBtn('durum','devral','Cevap verdi (' + (say.devral || 0) + ')'),
         segBtn('durum','cevap','Cevap bekleyen (' + (say.cevap || 0) + ')'), segBtn('durum','hepsi','Açık hepsi (' + (say.hepsi || 0) + ')'), segBtn('durum','kapanan','Kapanan (' + (say.kapanan || 0) + ')')]),
       uyeMi() ? null : h('label', {'for':'kimSec'}, ['Kim', (function(){ var sel = h('select', {id:'kimSec'}, [h('option', {value:'hepsi', text:'Herkes'}), h('option', {value:'ben', text:'Ben'})].concat(EKIP.filter(function(e){ return e.ad !== 'Özkan'; }).map(function(e){ return h('option', {value:e.ad, text:e.ad + ' (' + ({asistan:'asistan', danisman:'danışman'}[e.rol] || e.rol) + ')'}); })));
         sel.value = takipFiltre.kim; sel.addEventListener('change', function(){ takipFiltre.kim = sel.value; takip(); }); return sel; })()]),
       h('div', {cls:'m', text:'Bugün ' + (say.bugun_yazilan || 0) + ' temas kaydedildi. Sıra: önce cevap verenler, sonra takip tarihi gelenler. Sonraki tarih ve adım sonuçtan otomatik doluyor.'})];
-    if (!d.rows.length) out.push(empty('Bu filtrede kayıt yok.'));
+    if (!d.rows.length) out.push(empty(takipFiltre.ara ? 'Bu aramayla kayıt yok. İlan numarasını kontrol et; mesajı uygulamadan göndermediysen kayıt açılmamış olabilir: "Bugün aranacaklar"da ilanı bulup "Sahibinden\'den gönderdim"e bas.' : 'Bu filtrede kayıt yok.'));
     d.rows.forEach(function(x){
       var adim = takipAdim(x), msg = adim && adim !== 'birak' ? takipMesaj({adim:adim, tur:x.tur, mahalle:x.mahalle, site:x.site, oda:x.oda}) : '';
       var ref = x.id, gec = x.kalan != null && x.kalan < 0;
