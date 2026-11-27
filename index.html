@@ -63,7 +63,21 @@ main{grid-template-columns:minmax(0,1fr)}
 .m{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
 .price{font-variant-numeric:tabular-nums;font-weight:700}
 .chip{display:inline-block;background:var(--chip);border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;color:var(--ink)}
-.chip.solid{color:#fff}
+.chip.solid{color:#fff;background:var(--navy)}
+.chip.sahip{background:var(--navy);color:#fff;font-size:12.5px}
+.card.is{border-left:6px solid var(--line)}
+.card.is .m{color:#3d4658}
+.card.is.u-kirmizi{border-left-color:#c8102e;background:#fdf1f2}
+.card.is.u-turuncu{border-left-color:#e8710a;background:#fff6ec}
+.card.is.u-sari{border-left-color:#d4a400;background:#fffbe8}
+.card.is.u-yesil{border-left-color:#0f7a4a;background:#eef8f2}
+.card.is.u-gri{border-left-color:#9aa6bb}
+.card.is.u-kapali{border-left-color:#9aa6bb;opacity:.75}
+.uyari{font-weight:700;font-size:13px;padding:6px 10px;border-radius:8px}
+.uyari.kirmizi{background:#c8102e;color:#fff}.uyari.turuncu{background:#e8710a;color:#fff}.uyari.yesil{background:#0f7a4a;color:#fff}
+.kural{border:2px solid #e8710a;background:#fff6ec;border-radius:10px;padding:10px 12px;font-size:13.5px;color:#7a3a00;display:grid;gap:6px}
+.sira{font-weight:800;font-size:15px;color:var(--ink)}
+.renkler{display:flex;flex-wrap:wrap;gap:6px;font-size:12px}.renkler span{padding:2px 8px;border-radius:6px;border-left:5px solid}
 .chip.solid.good{background:var(--good);color:#fff}
 .chip.solid.bad{background:var(--bad);color:#fff}
 .chip.solid.warn{background:var(--warn);color:#fff}
@@ -131,7 +145,7 @@ header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px
 <div id="menu" hidden></div>
 <main id="view"><div class="spin">Yükleniyor…</div></main>
 <nav id="nav" hidden>
-  <a href="#ekip" data-r="ozkan">Ekip</a><a href="#isler" data-r="ozkan uye">İşler</a><a href="#pano" data-r="uye">Pano</a><a href="#firsat" data-r="ozkan">Fırsatlar</a><a href="#ilan" data-r="ozkan">İlan</a>
+  <a href="#ekip" data-r="ozkan">Ekip</a><a href="#isler" data-r="ozkan uye">İşler</a><a href="#pano" data-r="uye">Hareket geçmişi</a><a href="#firsat" data-r="ozkan">Fırsatlar</a><a href="#ilan" data-r="ozkan">İlan</a>
 </nav>
 
 <dialog id="dlg">
@@ -299,7 +313,7 @@ function fmtDate(d){ if (!d) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(
 /* ---------- veri: Supabase (giriş yapmış kullanıcı, yetki DB'de) ---------- */
 var SB_URL = 'https://rmivnznwjdtbkcgrssal.supabase.co';
 /* ---------- otomatik güncelleme: telefon eski sürümü önbellekte tutmasın ---------- */
-var SURUM = '2026.11.27d';
+var SURUM = '2026.11.27e';
 function surumKontrol(){
   fetch('version.txt?t=' + Date.now(), {cache:'no-store'}).then(function(r){ return r.ok ? r.text() : ''; }).then(function(v){
     v = (v || '').trim();
@@ -1227,34 +1241,53 @@ function ozetGoster(kutu, r){
     h('div', {cls:'m', text:'Fiyat ve satış tablosu yazılı verilmez; Özkan yüz yüze gösterir. İş Özkan\'a geçti: bugün arayacak.'})]));
 }
 
-function isKart(x, yenile){
-  var kod = (x.sonraki || {}).kod, kutu = h('div'), lider = !uyeMi();
+function aciliyet(x){
+  if (x.durum === 'kapandi') return ['u-kapali', null];
+  if (x.durum === 'yetki' || x.durum === 'randevu') return ['u-yesil', null];
+  if (x.durum === 'liderde') return [uyeMi() ? 'u-yesil' : 'u-kirmizi', uyeMi() ? ['yesil', 'Özkan\'a geçti: o arayacak'] : ['kirmizi', 'SENİ BEKLİYOR: bugün ara, randevu al']];
+  if (x.durum === 'cevap') return ['u-kirmizi', ['kirmizi', 'SAHİP CEVAP VERDİ: ne dediğini işaretle']];
+  if (x.gecikme > 0 && ['temas','beklemede','atandi'].indexOf(x.durum) >= 0) return ['u-kirmizi', ['kirmizi', x.gecikme + ' GÜN GECİKTİ']];
+  if (x.durum === 'atandi' || x.gecikme === 0) return ['u-turuncu', ['turuncu', 'BUGÜN']];
+  if (x.gecikme === -1) return ['u-sari', null];
+  return ['u-gri', null];
+}
+function isKart(x, yenile, fiyatYer){
+  var kod = (x.sonraki || {}).kod, kutu = h('div'), lider = !uyeMi(), ac = aciliyet(x);
   var baslik = [mah(x.mahalle), x.site, x.oda, x.m2 ? x.m2 + ' m²' : ''].filter(Boolean).join(' · ') || ('Kayıt ' + x.id);
   var gec = x.gecikme > 0 && ['temas','beklemede','liderde'].indexOf(x.durum) >= 0;
   var bilgi = {mahalle:x.mahalle, site:x.site, oda:x.oda, tur:x.tur, emlakci_istemez:x.emlakci_istemez, eski_fiyat:(x.ilk_fiyat && x.fiyat < x.ilk_fiyat) ? x.ilk_fiyat : null};
   var ana = [];
   function araBtn(){ if (!x.tel) return null; var a = h('a', {cls:'btn ara', href:'tel:+90' + digits(x.tel), text:'ARA'}); a.addEventListener('click', function(){ setTimeout(function(){ neOldu(x, kutu, yenile); }, 900); }); return a; }
   function mesajBtn(metin, etiket){ if (!x.tel || !metin) return null; var a = h('a', {cls:'btn' + (ana.length ? '' : ' pri'), href:waLink(x.tel, metin), target:'_blank', rel:'noopener', text:etiket || 'Mesajı WhatsApp\'ta gönder'});
-    a.addEventListener('click', function(){ isHareket(x, 'mesaj', '').then(function(r){ kutu.replaceChildren(h('div', {cls:'msg', text:'Mesaj kaydedildi. Sıradaki: ' + ((r.sonraki || {}).ad || '') + (r.takip ? ' (' + fmtDate(r.takip) + ')' : '') + '. Cevap gelirse bu kartta "Ne oldu?"ya bas.'})); setTimeout(yenile, 2500); }); }); return a; }
+    a.addEventListener('click', function(){ isHareket(x, 'mesaj', '').then(function(r){ if (!r.ok) { kutu.replaceChildren(h('div', {cls:'kural', text:r.neden || 'Kaydedilemedi'})); return; } kutu.replaceChildren(h('div', {cls:'msg', text:'Mesaj kaydedildi. Sıradaki: ' + ((r.sonraki || {}).ad || '') + (r.takip ? ' (' + fmtDate(r.takip) + ')' : '') + '. Cevap gelirse bu kartta "Ne oldu?"ya bas.'})); setTimeout(yenile, 2500); }); }); return a; }
   if (kod === 'ilk') { var saat = new Date().getHours(); if (saat >= 10 && saat < 19) ana.push(araBtn()); ana.push(mesajBtn(fsboMesaj(bilgi), 'İlk mesajı WhatsApp\'ta gönder')); }
-  else if (kod === 'ara' || kod === 'lider_ara') { ana.push(araBtn()); }
+  else if (kod === 'ara' || kod === 'lider_ara') { ana.push(araBtn());
+    if (x.tel) { var wb = h('button', {text:'WhatsApp'}); wb.addEventListener('click', function(){
+      if (x.mesaj_serbest) { location.href = waLink(x.tel); return; }
+      kutu.replaceChildren(h('div', {cls:'kural'}, [h('b', {text:'Kural: cevapsız mesajdan sonra ikinci mesaj atılmaz.'}),
+        h('div', {text:'Bu kişiye son temas WhatsApp mesajıydı ve cevap gelmedi. Şimdi yapılacak: ARA. Açmazsa "Ne oldu? → Açmadı" de. 2 aramada ulaşamazsan sistem "aradım, ulaşamadım" mesajını kendisi açar.'}),
+        h('div', {text:'Neden? Mesaja dönmeyen kişiyi ikinci mesaj ikna etmez; telefonda 1 dakikalık konuşma çok daha çok yetki getiriyor.'}),
+        h('div', {cls:'acts'}, [araBtn(), h('a', {cls:'btn', href:waLink(x.tel), target:'_blank', rel:'noopener', text:'Acil: sadece sohbeti aç (kayıt olmaz)'})])])); });
+      ana.push(wb); } }
   else if (kod === 'ulasamadim') { ana.push(mesajBtn(takipMesaj({adim:'ulasamadim', tur:x.tur, mahalle:x.mahalle, site:x.site, oda:x.oda}), '"Ulaşamadım" mesajını gönder')); ana.push(araBtn()); }
   else if (kod === 'bekle') { var bb = h('button', {cls:'pri', text:'30 gün beklemeye al'}); bb.addEventListener('click', function(){ bb.disabled = true; isHareket(x, 'bekle', '5 denemede ulaşılamadı').then(yenile); }); ana.push(bb); }
   else if (kod === 'isaretle') { /* doğrudan Ne oldu paneli açık gelsin */ }
   ana = ana.filter(Boolean);
   var noBtn = h('button', {text:'Ne oldu?', cls:kod === 'isaretle' ? 'pri' : ''}); noBtn.addEventListener('click', function(){ neOldu(x, kutu, yenile); });
-  var ust = [lider ? chip('Sahibi: ' + (x.sahip || '?'), x.sahip === 'Özkan' ? 'solid good' : 'solid') : null,
+  var ust = [lider ? chip('Sahibi: ' + (x.sahip || '?'), 'sahip') : null,
     chip(x.durum_ad, DURUM_RENK[x.durum]), x.deneme ? chip(x.deneme + '. deneme') : null,
     x.takip && x.durum !== 'kapandi' ? chip((gec ? 'gecikti ' : (x.gecikme === 0 ? 'bugün ' : '')) + fmtDate(x.takip), gec ? 'bad' : (x.gecikme === 0 ? 'warn' : null)) : null,
     x.yayinda === false ? chip('İLAN KALKTI', 'solid bad') : null, bilgi.eski_fiyat ? chip('fiyatı düştü', 'warn') : null];
   var kids = [
     h('div', {cls:'row'}, ust),
     h('div', {cls:'t', text:baslik}),
-    h('div', {cls:'price', style:'font-size:14px', text:(x.fiyat ? tl(x.fiyat) : '') + (bilgi.eski_fiyat ? ' (önce ' + tl(x.ilk_fiyat) + ')' : '') + (x.gun != null ? ' · ' + x.gun + ' gündür yayında' : '')}),
+    ac[1] ? h('div', {cls:'uyari ' + ac[1][0], text:ac[1][1]}) : null,
+    fiyatYer || h('div', {cls:'price', style:'font-size:14px', text:x.fiyat ? tl(x.fiyat) : ''}),
+    x.gun != null ? h('div', {cls:'m', text:x.gun + ' gündür yayında' + (bilgi.eski_fiyat ? ' · fiyatı ' + tl(x.ilk_fiyat) + '\'den indi' : '')}) : null,
     x.sahip_dedi ? h('div', {cls:'m', text:'Sahip dedi: ' + x.sahip_dedi}) : null,
     x.son ? h('div', {cls:'m', text:'Son temas: ' + x.son + (x.kanal ? ' (' + x.kanal + ')' : '')}) : null,
     x.kapanis ? h('div', {cls:'m', text:'Kapanış: ' + x.kapanis}) : null,
-    h('div', {style:'font-weight:700', text:'Sıradaki: ' + ((x.sonraki || {}).ad || '-') + (x.beklenen ? ' → ' + (x.beklenen === AD ? 'SEN' : x.beklenen) : '')}),
+    h('div', {cls:'sira', text:'Sıradaki: ' + ((x.sonraki || {}).ad || '-') + (x.beklenen ? ' → ' + (x.beklenen === AD ? 'SEN' : x.beklenen) : '')}),
     !x.tel && x.durum !== 'kapandi' ? h('div', {cls:'m', style:'color:var(--warn)', text:'Telefon yok: ilanı aç, numarayı al, aşağıya ekle.'}) : null,
     !x.tel && x.durum !== 'kapandi' ? telEkle(x.id, yenile) : null,
     ana.length || x.durum !== 'kapandi' ? h('div', {cls:'acts'}, ana.concat([x.durum === 'kapandi' ? null : noBtn])) : null,
@@ -1263,7 +1296,7 @@ function isKart(x, yenile){
       lider ? ataSec(x.id, x.sahip, x.no, baslik, kutu, yenile) : null,
       x.durum === 'kapandi' || x.durum === 'beklemede' ? h('button', {text:'Yeniden aç', onclick:function(e){ e.target.disabled = true; isHareket(x, 'tekrar', '').then(yenile); }}) : null]),
     gecmisPanel(x.id, 'Geçmiş')];
-  var c = h('div', {cls:'card' + (x.durum === 'cevap' || x.durum === 'liderde' ? ' hot' : '')}, kids.filter(Boolean));
+  var c = h('div', {cls:'card is ' + ac[0]}, kids.filter(Boolean));
   if (kod === 'isaretle') setTimeout(function(){ neOldu(x, kutu, yenile); }, 0);
   return c;
 }
@@ -1285,8 +1318,12 @@ function isler(){
       h('div', {cls:'m', text:'Bugün ' + (say.bugun_yapilan || 0) + ' hareket kaydedildi' + (say.cevap ? ' · ' + say.cevap + ' cevap işaretlenmeyi bekliyor' : '') + (d.yeni_atanan ? ' · bugün sana ' + d.yeni_atanan + ' yeni ilan atandı' : '') + '.'})];
     if (isFiltre.ara) out.push(h('div', {cls:'row'}, [chip('"' + isFiltre.ara + '": ' + d.rows.length + ' sonuç (tüm işlerde)'), h('button', {text:'Aramayı temizle', onclick:function(){ isFiltre.ara = ''; isler(); }})]));
     if (!d.rows.length) out.push(empty(isFiltre.ara ? 'Bu aramayla iş yok. İlan numarasını kontrol et.' : (isFiltre.sekme === 'bugun' ? 'Bugün yapılacak iş kalmadı.' : 'Burada iş yok.')));
-    d.rows.forEach(function(x){ out.push(isKart(x, isler)); });
+    out.push(h('div', {cls:'renkler'}, [h('span', {style:'border-color:#c8102e', text:'kırmızı: hemen (gecikti / cevap geldi)'}), h('span', {style:'border-color:#e8710a', text:'turuncu: bugün'}),
+      h('span', {style:'border-color:#d4a400', text:'sarı: yarın'}), h('span', {style:'border-color:#0f7a4a', text:'yeşil: Özkan\'da / randevu'}), h('span', {style:'border-color:#9aa6bb', text:'gri: bekliyor'})]));
+    var fs = {};
+    d.rows.forEach(function(x){ out.push(isKart(x, isler, fiyatBagla(fs, x.id))); });
     view.replaceChildren.apply(view, out.filter(Boolean));
+    fiyatYukle(fs, false);
   }).catch(fail);
 }
 
@@ -1302,11 +1339,13 @@ function ekip(){
     });
     out.push(sec('Bende: aranacak', (d.bende || []).length, 'Ekipten gelen sıcak işler. Ara, 15 dakikalık randevu al, "Ne oldu?"dan işaretle.'));
     if (!(d.bende || []).length) out.push(empty('Şu an sende bekleyen iş yok.'));
-    (d.bende || []).forEach(function(x){ out.push(isKart(x, ekip)); });
+    var fsE = {};
+    (d.bende || []).forEach(function(x){ out.push(isKart(x, ekip, fiyatBagla(fsE, x.id))); });
     out.push(sec('Atama kuralları', null, 'Yeni ilan geldiğinde kime atanacağını belirler. Mahalle kuralı ilçe kuralından önce gelir. Tek tek ilanı kartta "İşi ver" ile de değiştirebilirsin.'));
     out.push(kuralKutusu(d.kurallar || []));
     if (+d.eski_adaylar) out.push(h('div', {cls:'msg', text:'Sende eski sistemden kalan ' + d.eski_adaylar + ' aday kayıt var (hiç temas edilmemiş). Ne yapılacağına karar ver: kurala göre ekibe dağıtılsın mı, kapansın mı? Claude\'a söylemen yeterli.'}));
     view.replaceChildren.apply(view, out.filter(Boolean));
+    fiyatYukle(fsE, false);
   }).catch(fail);
 }
 
@@ -1334,8 +1373,9 @@ function route(){
   var def = uyeMi() ? 'isler' : 'ekip';
   document.getElementById('menu').hidden = true;
   var k = (location.hash || '#' + def).slice(1);
-  if (!R[k] || (uyeMi() && ['pano','isler','sevilay','takip','kilavuz','firsat'].indexOf(k) < 0)) k = def;
+  if (!R[k] || (uyeMi() && ['pano','isler','sevilay','takip','kilavuz'].indexOf(k) < 0)) k = def;
   var mb = document.getElementById('menuBtn'); if (mb) mb.setAttribute('aria-expanded', 'false');
+  var isLink = document.querySelector('nav a[href="#isler"]'); if (isLink) isLink.textContent = uyeMi() ? 'İşlerim' : 'İşler';
   [].forEach.call(document.querySelectorAll('nav a'), function(a){
     a.hidden = (a.getAttribute('data-r') || '').split(' ').indexOf(ROL) < 0;
     if (a.getAttribute('href') === '#' + (k === 'takip' || k === 'sevilay' ? 'isler' : k)) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
@@ -1357,7 +1397,7 @@ function basla(){
 }
 function menuKur(){
   var m = document.getElementById('menu'), b = document.getElementById('menuBtn');
-  var items = [['grp', 'Çalışma'], ['#pano', 'Pano (ekip akışı)'], ROL === 'ozkan' ? ['#bugun', 'Günün özeti (piyasa, görevler, fırsat olayları)'] : null, ROL === 'ozkan' ? ['#ara', 'Alıcı çalışması (alıcıya ilan bul)'] : null, ['#firsat', 'Fırsatlar'], ROL === 'ozkan' ? ['#kisi', 'Kişi ara'] : null, ROL === 'ozkan' ? ['#huni', 'Portföy hunisi'] : null,
+  var items = [['grp', 'Çalışma'], ['#pano', 'Hareket geçmişi (kim, kime, ne yazdı)'], ROL === 'ozkan' ? ['#bugun', 'Piyasa özeti ve görevlerim'] : null, ROL === 'ozkan' ? ['#ara', 'Alıcıya ilan bul'] : null, ROL === 'ozkan' ? ['#kisi', 'Kişi ara'] : null, ROL === 'ozkan' ? ['#huni', 'Portföy hunisi (aday → yetki sayıları)'] : null,
     ['grp', 'Yardım'], ['#kilavuz', 'Kullanım kılavuzu'], ROL === 'ozkan' ? ['#protest', 'sahibinden Pro testi'] : null, ['grp', 'Hesap']].filter(Boolean);
   m.replaceChildren.apply(m, items.map(function(x){ return x[0] === 'grp' ? h('div', {cls:'grp', text:x[1]}) : h('a', {href:x[0], text:x[1]}); }).concat([
     h('a', {href:'#', text:'Sayfayı yenile', onclick:function(e){ e.preventDefault(); location.reload(); }}),
